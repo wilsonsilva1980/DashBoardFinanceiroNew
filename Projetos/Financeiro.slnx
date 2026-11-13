@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Financeiro.Api/Financeiro.Api.csproj" />
+    <Project Path="src/Financeiro.Application/Financeiro.Application.csproj" />
+    <Project Path="src/Financeiro.Domain/Financeiro.Domain.csproj" />
+    <Project Path="src/Financeiro.Infrastructure/Financeiro.Infrastructure.csproj" />
+    <Project Path="src/Financeiro.Migrations.PostgreSql/Financeiro.Migrations.PostgreSql.csproj" />
+    <Project Path="src/Financeiro.Migrations.SqlServer/Financeiro.Migrations.SqlServer.csproj" />
+    <Project Path="src/Financeiro.Migrator/Financeiro.Migrator.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Financeiro.Api.IntegrationTests/Financeiro.Api.IntegrationTests.csproj" />
+    <Project Path="tests/Financeiro.Application.Tests/Financeiro.Application.Tests.csproj" />
+    <Project Path="tests/Financeiro.Architecture.Tests/Financeiro.Architecture.Tests.csproj" />
+    <Project Path="tests/Financeiro.Domain.Tests/Financeiro.Domain.Tests.csproj" />
+    <Project Path="tests/Financeiro.Infrastructure.IntegrationTests/Financeiro.Infrastructure.IntegrationTests.csproj" />
+    <Project Path="tests/Financeiro.Migrations.Tests/Financeiro.Migrations.Tests.csproj" />
+  </Folder>
+</Solution>
