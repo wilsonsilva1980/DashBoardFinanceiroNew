@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Financeiro.Infrastructure.Payments;
 
-public sealed class HistoricalSettlementService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions) : IHistoricalSettlementService
+public sealed class HistoricalSettlementService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions, IAuditWriter? auditWriter = null) : IHistoricalSettlementService
 {
     public async Task<IReadOnlyList<HistoricalSettlementEntry>> ListAsync(Guid titleId, CancellationToken cancellationToken = default)
     {
@@ -53,13 +53,13 @@ public sealed class HistoricalSettlementService(FinanceiroDbContext db, Financia
             SourceStatus = TrimToNull(input.SourceStatus)
         };
         db.HistoricalSettlements.Add(settlement);
-        Audit("liquidacao-historica.registrada", settlement.Id, JsonSerializer.Serialize(new
+        Writer.Record("liquidacao-historica.registrada", "HistoricalSettlement", settlement.Id, new
         {
             titleId = settlement.TitleId,
             amount = settlement.Amount,
             effectiveDate = settlement.EffectiveDate,
             previousReference = settlement.PreviousReference
-        }));
+        });
         await db.SaveChangesAsync(cancellationToken);
         return Entry(settlement);
     }
@@ -77,13 +77,13 @@ public sealed class HistoricalSettlementService(FinanceiroDbContext db, Financia
             throw new CatalogValidationException("Informe o motivo da revogação.");
         settlement.RevokedAt = DateTimeOffset.UtcNow;
         settlement.RevocationReason = input.Reason.Trim();
-        Audit("liquidacao-historica.revogada", settlement.Id, JsonSerializer.Serialize(new
+        Writer.Record("liquidacao-historica.revogada", "HistoricalSettlement", settlement.Id, new
         {
             titleId = settlement.TitleId,
             amount = settlement.Amount,
             effectiveDate = settlement.EffectiveDate,
             reason = settlement.RevocationReason
-        }));
+        });
         await db.SaveChangesAsync(cancellationToken);
         return Entry(settlement);
     }
@@ -97,19 +97,7 @@ public sealed class HistoricalSettlementService(FinanceiroDbContext db, Financia
             throw new AccessDeniedException("Permissão financeira necessária no espaço ativo.");
     }
 
-    private void Audit(string action, Guid entityId, string changesJson) => db.AuditRecords.Add(new AuditRecord
-    {
-        TenantId = scope.TenantId!.Value,
-        SpaceId = scope.SpaceId!.Value,
-        UserId = actor.UserId,
-        CreatedBy = actor.UserId,
-        Action = action,
-        Entity = "HistoricalSettlement",
-        EntityId = entityId,
-        Instant = DateTimeOffset.UtcNow,
-        CorrelationId = actor.CorrelationId,
-        ChangesJson = changesJson
-    });
+    private IAuditWriter Writer => auditWriter ?? new AuditWriter(db, scope, actor);
 
     private static HistoricalSettlementEntry Entry(HistoricalSettlement x) =>
         new(x.Id, x.TitleId, x.PayerId, x.ApprovedBy, Money(x.Amount), x.EffectiveDate, x.Justification,

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Financeiro.Infrastructure.Obligations;
 
-public sealed class ObligationService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions) : IObligationService
+public sealed class ObligationService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions, IAuditWriter? auditWriter = null) : IObligationService
 {
     public async Task<PageResult<ObligationEntry>> ListAsync(PageRequest page, CancellationToken cancellationToken = default)
     {
@@ -109,7 +109,7 @@ public sealed class ObligationService(FinanceiroDbContext db, FinancialScope sco
         entity.State = input.State;
         entity.CancelledAt = input.State == TitleState.Cancelled ? entity.CancelledAt ?? DateTimeOffset.UtcNow : null;
         if (id.HasValue && input.State == TitleState.Cancelled && previousState != TitleState.Cancelled)
-            Audit("titulo.cancelado", "PayableTitle", entity.Id, JsonSerializer.Serialize(new { previousState = previousState.ToString(), occurrenceKey = entity.OccurrenceKey, originalAmount = entity.OriginalAmount }));
+            Writer.Record("titulo.cancelado", "PayableTitle", entity.Id, new { previousState = previousState.ToString(), occurrenceKey = entity.OccurrenceKey, originalAmount = entity.OriginalAmount });
         if (isNew) db.PayableTitles.Add(entity);
         await db.SaveChangesAsync(cancellationToken);
         return await TitleEntryAsync(entity, cancellationToken);
@@ -241,7 +241,7 @@ public sealed class ObligationService(FinanceiroDbContext db, FinancialScope sco
         if (await db.PayableTitles.AnyAsync(x => x.ObligationId == id, cancellationToken))
             throw new RequestConflictException("A obrigação possui títulos vinculados. Desative-a e cancele os títulos para preservar o histórico financeiro.");
         db.Obligations.Remove(entity);
-        Audit("obrigacao.excluida", "Obligation", id, JsonSerializer.Serialize(new { description = entity.Description, kind = entity.Kind, installmentCount = entity.InstallmentCount }));
+        Writer.Record("obrigacao.excluida", "Obligation", id, new { description = entity.Description, kind = entity.Kind, installmentCount = entity.InstallmentCount });
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -260,7 +260,7 @@ public sealed class ObligationService(FinanceiroDbContext db, FinancialScope sco
             await db.PlanningEntrys.AnyAsync(x => x.TitleId == id, cancellationToken))
             throw new RequestConflictException("O título possui referências financeiras ou de planejamento e não pode ser excluído. Cancele-o para preservar o histórico.");
         db.PayableTitles.Remove(entity);
-        Audit("titulo.excluido", "PayableTitle", id, JsonSerializer.Serialize(new { occurrenceKey = entity.OccurrenceKey, originalAmount = entity.OriginalAmount, state = entity.State.ToString() }));
+        Writer.Record("titulo.excluido", "PayableTitle", id, new { occurrenceKey = entity.OccurrenceKey, originalAmount = entity.OriginalAmount, state = entity.State.ToString() });
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -272,19 +272,7 @@ public sealed class ObligationService(FinanceiroDbContext db, FinancialScope sco
 
     private T New<T>() where T : ScopedEntity, new() => new() { TenantId = scope.TenantId!.Value, SpaceId = scope.SpaceId!.Value, CreatedBy = actor.UserId };
 
-    private void Audit(string action, string entity, Guid entityId, string changesJson) => db.AuditRecords.Add(new AuditRecord
-    {
-        TenantId = scope.TenantId!.Value,
-        SpaceId = scope.SpaceId!.Value,
-        UserId = actor.UserId,
-        CreatedBy = actor.UserId,
-        Action = action,
-        Entity = entity,
-        EntityId = entityId,
-        Instant = DateTimeOffset.UtcNow,
-        CorrelationId = actor.CorrelationId,
-        ChangesJson = changesJson
-    });
+    private IAuditWriter Writer => auditWriter ?? new AuditWriter(db, scope, actor);
     private async Task<Obligation> ObligationAsync(Guid id, CancellationToken cancellationToken) =>
         await db.Obligations.SingleOrDefaultAsync(x => x.Id == id, cancellationToken) ?? throw new CatalogNotFoundException();
     private async Task<PayableTitle> TitleAsync(Guid id, CancellationToken cancellationToken) =>

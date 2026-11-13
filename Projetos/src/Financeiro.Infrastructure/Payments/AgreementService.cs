@@ -15,7 +15,7 @@ namespace Financeiro.Infrastructure.Payments;
 /// discounts and payment allocations atomically without creating a second payable amount.
 /// Simulations stay nonfinancial.
 /// </summary>
-public sealed class AgreementService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions) : IAgreementService
+public sealed class AgreementService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions, IAuditWriter? auditWriter = null) : IAgreementService
 {
     public async Task<PageResult<AgreementEntry>> ListAsync(PageRequest page, CancellationToken cancellationToken = default)
     {
@@ -164,13 +164,13 @@ public sealed class AgreementService(FinanceiroDbContext db, FinancialScope scop
             }
             agreement.State = "Confirmed";
             agreement.PaymentId = payment.Id;
-            Audit("acordo.confirmado", agreement.Id, JsonSerializer.Serialize(new
+            Writer.Record("acordo.confirmado", "SettlementAgreement", agreement.Id, new
             {
                 paymentId = payment.Id,
                 amount = net,
                 currency = input.Currency,
                 discounts = lines.Select(x => new { titleId = x.TitleId, discount = x.Discount })
-            }));
+            });
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -258,19 +258,7 @@ public sealed class AgreementService(FinanceiroDbContext db, FinancialScope scop
             throw new AccessDeniedException("Permissão financeira necessária no espaço ativo.");
     }
 
-    private void Audit(string action, Guid entityId, string changesJson) => db.AuditRecords.Add(new AuditRecord
-    {
-        TenantId = scope.TenantId!.Value,
-        SpaceId = scope.SpaceId!.Value,
-        UserId = actor.UserId,
-        CreatedBy = actor.UserId,
-        Action = action,
-        Entity = "SettlementAgreement",
-        EntityId = entityId,
-        Instant = DateTimeOffset.UtcNow,
-        CorrelationId = actor.CorrelationId,
-        ChangesJson = changesJson
-    });
+    private IAuditWriter Writer => auditWriter ?? new AuditWriter(db, scope, actor);
 
     private static AgreementEntry Entry(SettlementAgreement x, IReadOnlyList<AgreementTitle> titles) =>
         new(x.Id, x.ObligationId, x.ProposalDate, x.ValidUntil, Money(x.ProposedAmount), x.State, x.PaymentId, x.Version,

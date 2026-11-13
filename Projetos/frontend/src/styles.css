@@ -14,3 +14,4 @@ label{font-size:.8rem;font-weight:500;color:#4b6252;display:block;margin:16px 0 
 .stat strong { display: block; margin-top: .25rem; font-size: 1.05rem; }
 .inline-filters { display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
 .inline-filters label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
+.audit-toolbar{padding:18px 22px;border-bottom:1px solid #edf0ee}.audit-toolbar form{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr)) auto;gap:12px;align-items:end}.audit-toolbar label{margin:0 0 6px;font-size:.7rem}.audit-toolbar input,.audit-toolbar select{font-size:.78rem;padding:9px}.audit-actions{display:flex;gap:7px}.audit-detail p{font-size:.8rem;margin:0 0 10px}.audit-detail pre{background:#f5f8f3;border:1px solid #e0e9df;border-radius:7px;padding:15px;overflow:auto;font-size:.75rem;line-height:1.55;white-space:pre-wrap}

@@ -21,6 +21,8 @@ public sealed class CorrelationMiddleware(RequestDelegate next)
         }))
         {
             await next(context);
+            logger.LogInformation("Request completed with {StatusCode} {Method} {Path}",
+                context.Response.StatusCode, context.Request.Method, context.Request.Path.Value ?? string.Empty);
         }
     }
 }

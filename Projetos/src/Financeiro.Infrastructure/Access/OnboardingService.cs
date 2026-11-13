@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Financeiro.Infrastructure.Access;
 
-public sealed class OnboardingService(FinanceiroDbContext db, IRequestActor actor) : IOnboardingService
+public sealed class OnboardingService(FinanceiroDbContext db, IRequestActor actor, IAuditWriter? auditWriter = null) : IOnboardingService
 {
     public async Task<OnboardingResult> OnboardAsync(OnboardingRequest request, CancellationToken cancellationToken = default)
     {
@@ -60,9 +60,11 @@ public sealed class OnboardingService(FinanceiroDbContext db, IRequestActor acto
             if (name == "Administrador") db.Add(new MemberRole { TenantId = tenant.Id, SpaceId = space.Id, RoleId = role.Id, UserId = userId, CreatedBy = userId });
         }
         db.Add(new OnboardingRecord { UserId = userId, TenantId = tenant.Id, SpaceId = space.Id, RequestKey = request.RequestKey, PayloadHash = hash, CreatedBy = userId });
-        db.Add(new AuditRecord { TenantId = tenant.Id, SpaceId = space.Id, UserId = userId, Action = "onboarding.confirmed", Entity = "Tenant", EntityId = tenant.Id, Instant = now, CorrelationId = actor.CorrelationId, CreatedBy = userId });
+        Writer.Record("onboarding.confirmed", "Tenant", tenant.Id, tenantId: tenant.Id, spaceId: space.Id, userId: userId);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new OnboardingResult(tenant.Id, space.Id);
     }
+
+    private IAuditWriter Writer => auditWriter ?? new AuditWriter(db, new FinancialScope(), actor);
 }

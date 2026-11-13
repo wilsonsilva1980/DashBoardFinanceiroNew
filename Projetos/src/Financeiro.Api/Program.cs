@@ -1,7 +1,9 @@
 using Financeiro.Application.Accounts;
+using Financeiro.Application.Access;
 using Financeiro.Application.Dashboard;
 using Financeiro.Infrastructure.Accounts;
 using Financeiro.Infrastructure.Dashboard;
+using Financeiro.Infrastructure.Access;
 using Financeiro.Application.Catalogs;
 using Financeiro.Infrastructure.Catalogs;
 using Financeiro.Application.Obligations;
@@ -28,6 +30,7 @@ builder.Services.AddScoped<IHistoricalSettlementService, HistoricalSettlementSer
 builder.Services.AddScoped<IAgreementService, AgreementService>();
 builder.Services.AddScoped<IAccountPositionService, AccountPositionService>();
 builder.Services.AddScoped<IDashboardQueries, DashboardQueries>();
+builder.Services.AddScoped<IAuditQueryService, AuditQueryService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));

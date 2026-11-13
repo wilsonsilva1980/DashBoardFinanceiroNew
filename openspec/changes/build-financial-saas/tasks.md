@@ -60,13 +60,13 @@
 
 - [x] 9.1 Implement space-scoped dashboard queries for summaries, monthly evolution, categories, responsible parties, due dates, and positions; verify effective, forecast, open, partial, paid, and overdue values remain distinct.
 - [x] 9.2 Add reconciliation indicators to dashboard responses and UI without adding discrepancies to normal payable totals; verify query and browser tests surface discrepancies separately.
-- [ ] 9.3 Complete versioned REST endpoints, pagination, validation, `ProblemDetails`, OpenAPI examples, and contract tests; verify generated OpenAPI JSON and Swagger UI render expected authenticated operations.
+- [x] 9.3 Complete versioned REST endpoints, pagination, validation, `ProblemDetails`, OpenAPI examples, and contract tests; verify generated OpenAPI JSON and Swagger UI render expected authenticated operations.
 - [x] 9.4 Add structured logging, correlation identifiers, audit records, and secret/account-data redaction; verify sensitive values are absent from representative logs and confirmed operations have audit entries.
 
 ## 10. Release verification
 
-- [ ] 10.1 Execute the full backend/frontend suite and PostgreSQL/SQL Server integration matrix, including migration, authorization, concurrency, and idempotency coverage; verify every required job passes.
-- [ ] 10.2 Run an end-to-end manual-entry smoke workflow from onboarding through catalog, title, payment, recurrence, invoice, account position, travel, and dashboard; verify the workflow produces no duplicate payable amount or cross-space data exposure.
+- [x] 10.1 Execute the full backend/frontend suite and PostgreSQL/SQL Server integration matrix, including migration, authorization, concurrency, and idempotency coverage; verify every required job passes.
+- [x] 10.2 Run an end-to-end manual-entry smoke workflow from onboarding through catalog, title, payment, recurrence, invoice, account position, travel, and dashboard; verify the workflow produces no duplicate payable amount or cross-space data exposure.
 - [x] 10.3 Document local setup, provider selection, migration procedure, backup/rollback approach, security configuration, and known first-release exclusions; verify documented commands run from a clean environment.
 
 ## Workflow follow-up

@@ -290,10 +290,10 @@ public sealed class TravelService(FinanceiroDbContext db, FinancialScope scope, 
 
     private static TravelBudgetEntry BudgetEntry(TravelBudget x) => new(x.Id, x.Name, x.StartDate, x.EndDate, x.Version);
     private static TravelItemEntry ItemEntry(TravelItem x) => new(x.Id, x.TravelId, x.ObligationId, x.CategoryId, x.ResponsibleId, x.Description, x.State, x.Currency, Money(x.BaseAmount), Money(x.Fees), x.Version);
-    private static ExchangeRateEntry RateEntry(ExchangeRate x) => new(x.Id, x.SourceCurrency, x.DestinationCurrency, x.RateDate, x.DateContext, x.Rate.ToString(CultureInfo.InvariantCulture), x.Source, x.Version);
+    private static ExchangeRateEntry RateEntry(ExchangeRate x) => new(x.Id, x.SourceCurrency, x.DestinationCurrency, x.RateDate, x.DateContext, Rate(x.Rate), x.Source, x.Version);
     private static ItemConversionEntry ConversionEntry(ItemConversion x, ExchangeRate? rate) => new(
         x.Id, x.ItemId, x.RateId, x.DestinationCurrency, x.Mode, Money(x.ReportedAmount), x.DateContext,
-        rate is null ? null : rate.Rate.ToString(CultureInfo.InvariantCulture), rate?.RateDate, rate?.Source, x.Version);
+        rate is null ? null : Rate(rate.Rate), rate?.RateDate, rate?.Source, x.Version);
 
     private async Task<Dictionary<Guid, ExchangeRate>> LoadRatesAsync(IEnumerable<Guid?> rateIds, CancellationToken cancellationToken)
     {
@@ -302,4 +302,5 @@ public sealed class TravelService(FinanceiroDbContext db, FinancialScope scope, 
         return await db.ExchangeRates.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
     }
     private static string? Money(decimal? value) => value?.ToString("0.00", CultureInfo.InvariantCulture);
+    private static string Rate(decimal value) => value.ToString("0.########", CultureInfo.InvariantCulture);
 }

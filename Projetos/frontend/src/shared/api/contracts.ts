@@ -1,6 +1,10 @@
 export interface SessionUser { id: string; displayName: string; email: string; tenantId: string | null; spaceId: string | null }
 export interface FinancialSpace { tenantId: string; spaceId: string; name: string; currency: string }
 export interface Page<T> { items: T[]; total: number; page: number; pageSize: number }
+export interface AuditEntry {
+  id: string; instant: string; action: string; actionLabel: string; entity: string; entityId: string;
+  userId: string | null; userDisplayName: string | null; correlationId: string; changes: Record<string, unknown>;
+}
 export interface CatalogEntry {
   id: string; version: number; active: boolean; name?: string; nature?: string | null; code?: string | null;
   institutionId?: string; holderId?: string | null; brandId?: string | null; type?: string | null;

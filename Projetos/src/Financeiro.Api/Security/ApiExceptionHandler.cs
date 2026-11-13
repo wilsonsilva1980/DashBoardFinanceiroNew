@@ -29,7 +29,8 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger, IPr
         context.Response.StatusCode = status;
         var problem = new ProblemDetails
         {
-            Status = status, Title = title,
+            Status = status,
+            Title = title,
             Detail = exception is CatalogValidationException or ReferencedCatalogException or CatalogNameConflictException or RequestConflictException ? exception.Message : null,
             Extensions = { ["traceId"] = context.TraceIdentifier, ["correlationId"] = context.TraceIdentifier }
         };

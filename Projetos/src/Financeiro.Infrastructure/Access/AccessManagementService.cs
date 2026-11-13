@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Financeiro.Infrastructure.Access;
 
-public sealed class AccessManagementService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions)
+public sealed class AccessManagementService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions, IAuditWriter? auditWriter = null)
 {
     public async Task DeactivateSpaceMemberAsync(Guid userId, long expectedVersion, CancellationToken cancellationToken = default)
     {
@@ -28,7 +28,7 @@ public sealed class AccessManagementService(FinanceiroDbContext db, FinancialSco
             throw new RequestConflictException("Cannot deactivate the final space administrator.");
         member.Active = false;
         member.AccessVersion++;
-        Audit("space.member.deactivated", member.Id);
+        Writer.Record("space.member.deactivated", "Membership", member.Id);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
@@ -48,21 +48,10 @@ public sealed class AccessManagementService(FinanceiroDbContext db, FinancialSco
         if (member.Active && member.Administrator && await db.TenantMembers.CountAsync(x => x.TenantId == tenantId && x.Active && x.Administrator, cancellationToken) <= 1)
             throw new RequestConflictException("Cannot deactivate the final tenant administrator.");
         member.Active = false;
-        Audit("tenant.member.deactivated", member.Id);
+        Writer.Record("tenant.member.deactivated", "Membership", member.Id);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
 
-    private void Audit(string action, Guid entityId) => db.AuditRecords.Add(new AuditRecord
-    {
-        TenantId = scope.TenantId!.Value,
-        SpaceId = scope.SpaceId!.Value,
-        UserId = actor.UserId,
-        CreatedBy = actor.UserId,
-        Action = action,
-        Entity = "Membership",
-        EntityId = entityId,
-        Instant = DateTimeOffset.UtcNow,
-        CorrelationId = actor.CorrelationId
-    });
+    private IAuditWriter Writer => auditWriter ?? new AuditWriter(db, scope, actor);
 }

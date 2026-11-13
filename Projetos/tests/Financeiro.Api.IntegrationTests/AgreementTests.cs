@@ -46,7 +46,10 @@ public class AgreementTests
 
         var simulation = await PostAsync(browser, "/api/v1/acordos/simulacoes", new
         {
-            obligationId = seed.ObligationId, name = "Proposta inicial", simulationDate = "2026-11-10", notes = "Somente estudo",
+            obligationId = seed.ObligationId,
+            name = "Proposta inicial",
+            simulationDate = "2026-11-10",
+            notes = "Somente estudo",
             titles = Lines(seed)
         });
         Assert.Equal("130.00", simulation.GetProperty("proposedAmount").GetString());
@@ -56,18 +59,24 @@ public class AgreementTests
 
         Assert.Equal(HttpStatusCode.BadRequest, (await browser.PostAsJsonAsync("/api/v1/acordos", new
         {
-            obligationId = seed.ObligationId, proposalDate = "2026-11-10", validUntil = "2026-11-30",
+            obligationId = seed.ObligationId,
+            proposalDate = "2026-11-10",
+            validUntil = "2026-11-30",
             titles = new object[] { new { titleId = seed.FirstTitleId, nominalAmount = 99.00m, discount = 0.00m } }
         })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await browser.PostAsJsonAsync("/api/v1/acordos", new
         {
-            obligationId = seed.ObligationId, proposalDate = "2026-11-10", validUntil = "2026-11-30",
+            obligationId = seed.ObligationId,
+            proposalDate = "2026-11-10",
+            validUntil = "2026-11-30",
             titles = new object[] { new { titleId = seed.FirstTitleId, nominalAmount = 100.00m, discount = 120.00m } }
         })).StatusCode);
 
         var zeroNet = await PostAsync(browser, "/api/v1/acordos", new
         {
-            obligationId = seed.ObligationId, proposalDate = "2026-11-10", validUntil = "2026-11-30",
+            obligationId = seed.ObligationId,
+            proposalDate = "2026-11-10",
+            validUntil = "2026-11-30",
             titles = new object[] { new { titleId = seed.FirstTitleId, nominalAmount = 100.00m, discount = 100.00m } }
         });
         Assert.Equal("0.00", zeroNet.GetProperty("proposedAmount").GetString());

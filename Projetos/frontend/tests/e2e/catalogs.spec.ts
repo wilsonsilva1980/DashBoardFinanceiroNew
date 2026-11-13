@@ -25,7 +25,9 @@ async function backend(page: Page) {
     if (path === 'auth/logout') { state.authenticated = false; return route.fulfill({ status: 204 }); }
     if (!state.authenticated) return json({}, 401);
     if (path === 'context/spaces') return json([{ tenantId: tenant, spaceId: first, name: 'Família', currency: 'BRL' }, { tenantId: tenant, spaceId: second, name: 'Viagem', currency: 'USD' }]);
-    if (path === 'context/permissions') return json(state.reader ? ['cadastros.visualizar', 'dashboard.visualizar'] : ['cadastros.visualizar', 'cadastros.editar', 'dashboard.visualizar']);
+    if (path === 'context/permissions') return json(state.reader ? ['cadastros.visualizar', 'dashboard.visualizar'] : ['cadastros.visualizar', 'cadastros.editar', 'dashboard.visualizar', 'auditoria.visualizar']);
+    if (path === 'auditoria/eventos') return json({ 'onboarding.confirmed': 'Onboarding confirmado' });
+    if (path === 'auditoria') return json({ items: [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', instant: '2026-11-13T12:00:00Z', action: 'onboarding.confirmed', actionLabel: 'Onboarding confirmado', entity: 'Tenant', entityId: tenant, userId: user, userDisplayName: 'Ana', correlationId: 'browser-correlation', changes: {} }], total: 1, page: 1, pageSize: 20 });
     if (path === 'context/select') { state.selectStarted = true; if (state.holdSelect) await new Promise<void>(resolve => { state.releaseSelect = resolve; }); state.scope = body.spaceId; return route.fulfill({ status: 204 }); }
     const [kind, id] = path.split('/');
     const rows = data[state.scope][kind]; if (!rows) return json({}, 404);
@@ -112,4 +114,15 @@ test('navegação móvel e formulário de bandeiras são utilizáveis sem rolage
   await page.getByRole('link', { name: 'Contas', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Contas', exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('accounts-mobile.png'), fullPage: true });
+});
+
+test('auditoria exibe filtros, eventos e detalhes somente leitura', async ({ page }) => {
+  await backend(page); await page.goto('/auditoria');
+  await expect(page.getByRole('heading', { name: 'Auditoria', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Lista de auditoria').getByText('Onboarding confirmado', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Ver detalhes', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('onboarding.confirmed', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Registro somente leitura', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /Salvar|Excluir|Editar/ })).toHaveCount(0);
 });

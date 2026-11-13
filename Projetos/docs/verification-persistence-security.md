@@ -15,6 +15,7 @@ Tarefas concluídas nesta implementação: 1.4, 2.1–2.4 e 3.1–3.3. O progres
 - Login, expiração, security stamp com comparação ordinal independente da collation do banco, confirmação de email quando configurada, logout com cookie copiado, CSRF, senha, lockout, MFA obrigatório e permissão de leitor exercitados por HTTP.
 - Revogações concorrentes preservam o último administrador de espaço; a proteção do último administrador de tenant também foi exercitada nos dois providers.
 - OpenAPI apresenta os esquemas cookie/CSRF e o HTML do Swagger é servido em Development.
+- Auditoria funcional possui escritor central com redaction, consulta paginada protegida por `auditoria.visualizar`, isolamento por espaço, índices nos dois providers e tela React somente leitura em `/auditoria`.
 
 ## Decisão de domínio confirmada
 

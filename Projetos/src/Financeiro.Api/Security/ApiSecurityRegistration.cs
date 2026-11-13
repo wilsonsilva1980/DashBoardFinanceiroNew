@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi;
+using System.Text.Json.Nodes;
 
 namespace Financeiro.Api.Security;
 
@@ -17,6 +18,7 @@ public static class ApiSecurityRegistration
         services.AddHttpContextAccessor();
         services.AddScoped<IRequestActor, HttpRequestActor>();
         services.AddScoped<IOnboardingService, OnboardingService>();
+        services.AddScoped<IAuditWriter, AuditWriter>();
         services.AddScoped<PermissionEvaluator>();
         services.AddScoped<AccessManagementService>();
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
@@ -74,6 +76,21 @@ public static class ApiSecurityRegistration
                 {
                     ["cookieAuth"] = new OpenApiSecurityScheme { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Cookie, Name = "__Host-financeiro-auth" },
                     ["csrf"] = new OpenApiSecurityScheme { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Header, Name = "X-CSRF-TOKEN", Description = "Request token returned by /api/v1/auth/csrf; never use the HttpOnly cookie as a header value." }
+                };
+                document.Components.Examples = new Dictionary<string, IOpenApiExample>
+                {
+                    ["pageResult"] = new OpenApiExample
+                    {
+                        Summary = "Resposta paginada",
+                        Description = "Coleções retornam itens e metadados de paginação; pageSize máximo é 100.",
+                        Value = JsonNode.Parse("{\"items\":[],\"total\":0,\"page\":1,\"pageSize\":25}")
+                    },
+                    ["problemDetails"] = new OpenApiExample
+                    {
+                        Summary = "Erro de validação",
+                        Description = "Erros são retornados como application/problem+json e incluem o identificador de correlação.",
+                        Value = JsonNode.Parse("{\"type\":\"about:blank\",\"title\":\"Dados inválidos.\",\"status\":400,\"traceId\":\"00-...\",\"correlationId\":\"00-...\"}")
+                    }
                 };
                 return Task.CompletedTask;
             });

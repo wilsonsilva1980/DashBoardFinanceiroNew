@@ -8,7 +8,7 @@ const certificate = fileURLToPath(new URL('../artifacts/dev/localhost.pem', impo
 export default defineConfig({
   plugins: [react()],
   server: { host: 'localhost', port: 5173, strictPort: true, proxy: { '/api': {
-    target: process.env.FINANCEIRO_API_URL || 'https://localhost:7264', secure: true,
+    target: process.env.FINANCEIRO_API_URL || 'https://localhost:7264', secure: false,
     ...(existsSync(certificate) ? { agent: new Agent({ ca: readFileSync(certificate) }) } : {}),
   } } },
   test: { include: ['tests/unit/**/*.test.ts'], environment: 'node' },

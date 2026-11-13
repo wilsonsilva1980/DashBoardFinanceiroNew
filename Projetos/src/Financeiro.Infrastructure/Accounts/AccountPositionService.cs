@@ -21,9 +21,14 @@ public sealed class AccountPositionService(FinanceiroDbContext db, FinancialScop
         var account = await db.BankAccounts.SingleOrDefaultAsync(x => x.Id == input.AccountId, cancellationToken) ?? throw new CatalogValidationException("Conta indisponível no espaço ativo.");
         var position = new AccountPosition
         {
-            TenantId = scope.TenantId!.Value, SpaceId = scope.SpaceId!.Value, CreatedBy = actor.UserId,
-            AccountId = account.Id, PositionDate = input.PositionDate.Value, Balance = input.Balance,
-            SavingsBalance = input.SavingsBalance, OverdraftUsed = input.OverdraftUsed
+            TenantId = scope.TenantId!.Value,
+            SpaceId = scope.SpaceId!.Value,
+            CreatedBy = actor.UserId,
+            AccountId = account.Id,
+            PositionDate = input.PositionDate.Value,
+            Balance = input.Balance,
+            SavingsBalance = input.SavingsBalance,
+            OverdraftUsed = input.OverdraftUsed
         };
         db.AccountPositions.Add(position);
         await db.SaveChangesAsync(cancellationToken);

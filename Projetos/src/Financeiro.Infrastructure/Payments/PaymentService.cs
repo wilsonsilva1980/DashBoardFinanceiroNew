@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Financeiro.Infrastructure.Payments;
 
-public sealed class PaymentService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions, ITituloLockService locks) : IPaymentService
+public sealed class PaymentService(FinanceiroDbContext db, FinancialScope scope, IRequestActor actor, PermissionEvaluator permissions, ITituloLockService locks, IAuditWriter? auditWriter = null) : IPaymentService
 {
     private const string ConfirmOperation = "pagamento.confirmar";
 
@@ -106,12 +106,12 @@ public sealed class PaymentService(FinanceiroDbContext db, FinancialScope scope,
             await db.Entry(payment).ReloadAsync(cancellationToken);
             await ValidateSettlementAsync(payment, allocations, cancellationToken);
             payment.State = PaymentState.Confirmed;
-            Audit("pagamento.confirmado", payment.Id, JsonSerializer.Serialize(new
+            Writer.Record("pagamento.confirmado", "Payment", payment.Id, new
             {
                 amount = payment.Amount,
                 currency = payment.Currency,
                 allocations = allocations.Select(x => new { titleId = x.TitleId, amount = x.Amount })
-            }));
+            });
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return Entry(payment, allocations.Select(x => new PaymentAllocationEntry(x.TitleId, Money(x.Amount))).ToArray());
@@ -148,12 +148,12 @@ public sealed class PaymentService(FinanceiroDbContext db, FinancialScope scope,
         payment.State = PaymentState.Reversed;
         payment.ReversedAt = DateTimeOffset.UtcNow;
         payment.ReversalReason = input.Reason.Trim();
-        Audit("pagamento.revertido", payment.Id, JsonSerializer.Serialize(new
+        Writer.Record("pagamento.revertido", "Payment", payment.Id, new
         {
             reason = payment.ReversalReason,
             amount = payment.Amount,
             currency = payment.Currency
-        }));
+        });
         await db.SaveChangesAsync(cancellationToken);
         var allocations = await AllocationEntitiesAsync(id, cancellationToken);
         return Entry(payment, allocations.Select(x => new PaymentAllocationEntry(x.TitleId, Money(x.Amount))).ToArray());
@@ -220,19 +220,7 @@ public sealed class PaymentService(FinanceiroDbContext db, FinancialScope scope,
             throw new AccessDeniedException("Permissão financeira necessária no espaço ativo.");
     }
 
-    private void Audit(string action, Guid entityId, string changesJson) => db.AuditRecords.Add(new AuditRecord
-    {
-        TenantId = scope.TenantId!.Value,
-        SpaceId = scope.SpaceId!.Value,
-        UserId = actor.UserId,
-        CreatedBy = actor.UserId,
-        Action = action,
-        Entity = "Payment",
-        EntityId = entityId,
-        Instant = DateTimeOffset.UtcNow,
-        CorrelationId = actor.CorrelationId,
-        ChangesJson = changesJson
-    });
+    private IAuditWriter Writer => auditWriter ?? new AuditWriter(db, scope, actor);
 
     private static string PayloadHash(Payment payment, PaymentAllocation[] allocations)
     {

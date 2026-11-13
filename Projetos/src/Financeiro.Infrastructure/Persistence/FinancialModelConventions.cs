@@ -29,6 +29,10 @@ internal static partial class FinancialModelConventions
         model.Entity<UserSession>().ToTable("sessoes_usuario");
         model.Entity<UserSession>().HasIndex(x => new { x.UserId, x.ExpiresAt });
         model.Entity<AuditRecord>().HasIndex(x => new { x.TenantId, x.SpaceId, x.Instant });
+        model.Entity<AuditRecord>().HasIndex(x => new { x.TenantId, x.SpaceId, x.Action, x.Instant });
+        model.Entity<AuditRecord>().HasIndex(x => new { x.TenantId, x.SpaceId, x.UserId, x.Instant });
+        model.Entity<AuditRecord>().HasIndex(x => new { x.TenantId, x.SpaceId, x.Entity, x.EntityId, x.Instant });
+        model.Entity<AuditRecord>().HasIndex(x => new { x.TenantId, x.SpaceId, x.CorrelationId });
         model.Entity<UserSession>().HasKey(x => x.Id);
         model.Entity<UserSession>().Property(x => x.Id).ValueGeneratedNever();
         model.Entity<UserSession>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
