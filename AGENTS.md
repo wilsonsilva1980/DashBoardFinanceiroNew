@@ -65,5 +65,6 @@ Run from the paths noted; scripts assume Bash.
 ## Notes
 
 - CI is defined in `.github/workflows/financeiro-ci.yml` (backend, frontend, migration/integration matrix for PostgreSQL and SQL Server).
+- **Local database config**: dev connection strings live in `Projetos/src/Financeiro.Api/appsettings.Development.json` (`ConnectionStrings:PostgreSql` / `ConnectionStrings:SqlServer`, selected by `Database:Provider`). Switch provider with `Database__Provider=SqlServer`; override a connection with `ConnectionStrings__<Provider>` (or `ConnectionStrings__Financeiro`). See `docs/configuracao-conexao-api-postgres-sqlserver.md`.
 - There is no separate root `package.json`; frontend and backend workflows are rooted in `Projetos/`.
 - No Cursor/Copilot instruction files were found at init time; update this file if project conventions or commands change.

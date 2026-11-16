@@ -37,8 +37,8 @@ export function DashboardPage() {
   return <section className="workspace-page">
     <div className="page-heading"><div><p className="eyebrow">Visão do espaço ativo</p><h1>Dashboard financeiro</h1><p className="muted">Totais efetivos, previsão e reconciliação separados para revisão.</p></div>
       <div className="inline-filters">
-        <label>De <input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Até <input type="date" value={until} onChange={e => setUntil(e.target.value)} /></label>
+        <label htmlFor="dashboard-from">De <input id="dashboard-from" name="from" autoComplete="off" type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label htmlFor="dashboard-until">Até <input id="dashboard-until" name="until" autoComplete="off" type="date" value={until} onChange={e => setUntil(e.target.value)} /></label>
       </div>
     </div>
 

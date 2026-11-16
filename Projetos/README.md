@@ -20,17 +20,23 @@ Copie `Projetos/infra/.env.example` para `Projetos/infra/.env` e defina senhas l
 Da raiz, inicie um provider por vez: `bash Projetos/scripts/dev/database.sh postgres` ou `bash Projetos/scripts/dev/database.sh sqlserver`.
 Os serviços escutam apenas em localhost, nas portas 55432 e 51433. Compose mantém volumes persistentes; não apague volumes para trocar provider.
 
-Em `Projetos/`, configure variáveis de ambiente e execute a API:
+Em `Projetos/`, as conexões locais ficam em `src/Financeiro.Api/appsettings.Development.json`, em `ConnectionStrings:PostgreSql` e `ConnectionStrings:SqlServer`, com `Database:Provider` escolhendo qual é usada. Basta executar:
 
 ```bash
-export ASPNETCORE_ENVIRONMENT=Development
-export Database__Provider=PostgreSql
-export ConnectionStrings__Financeiro='Host=localhost;Port=55432;Database=financeiro;Username=financeiro;Password=SUA_SENHA_LOCAL'
-dotnet run --project src/Financeiro.Api --no-launch-profile --urls http://localhost:5000
+dotnet run --project src/Financeiro.Api
 ```
 
-Para SQL Server, use `Database__Provider=SqlServer` e `ConnectionStrings__Financeiro='Server=localhost,51433;Database=master;User Id=sa;Password=SUA_SENHA_LOCAL;Encrypt=True;TrustServerCertificate=True'`.
-`master` é usado somente para verificar conectividade nesta etapa; a aplicação usará banco próprio quando o migrator estiver implementado. `sa` e confiança no certificado local são exclusivos do desenvolvimento; produção exige usuário restrito e certificado válido.
+Para alternar de provider sem editar arquivos (o ambiente continua vindo do `launchSettings.json`):
+
+```bash
+Database__Provider=SqlServer dotnet run --project src/Financeiro.Api
+```
+
+Precedência de configuração: `ConnectionStrings:Financeiro` (variável `ConnectionStrings__Financeiro`) substitui a entrada específica do provider; sem ela, vale `ConnectionStrings:<PostgreSql|SqlServer>` (ou `ConnectionStrings__PostgreSql` / `ConnectionStrings__SqlServer`). Use essas variáveis quando precisar apontar para outro host/senha sem alterar o repositório.
+
+As senhas em `appsettings.Development.json` existem apenas para o Docker local e devem espelhar `Projetos/infra/.env` (se trocar a senha no `.env`, atualize o appsettings). Nunca reutilize esses valores fora de desenvolvimento.
+
+Para SQL Server, a connection string usa `Server=localhost,51433;Database=financeiro;User Id=sa;Encrypt=True;TrustServerCertificate=True`. O banco `financeiro` é criado/aplicado pelo migrator (veja [Migrations](#migrations)). `sa` e confiança no certificado local são exclusivos do desenvolvimento; produção exige usuário restrito e certificado válido.
 Em outro terminal, entre em `Projetos/frontend/` e execute `npm run dev`.
 O frontend encaminha `/api` para a API local. Saúde da API: `/health`.
 
