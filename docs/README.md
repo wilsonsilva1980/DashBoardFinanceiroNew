@@ -10,6 +10,7 @@ Registros de trabalho no repositório (pt-BR). Cada arquivo é autocontido; os l
 | [`diagnostico-rtk-gain.md`](./diagnostico-rtk-gain.md) | Diagnóstico | 2026-11-16 | Investigação sobre o wrapper `rtk`/gain no ambiente |
 | [`chrome-devtools-mcp.md`](./chrome-devtools-mcp.md) | Referência / how-to | 2026-11-16 | Instalação e uso do MCP Chrome DevTools (inspeção de console, rede, screenshots e performance no Chrome) |
 | [`teste-e2e-chrome-devtools.md`](./teste-e2e-chrome-devtools.md) | Registro de teste | 2026-11-16 | Teste E2E completo pelo Chrome (cadastro → pagamento → dashboard → auditoria), bugs encontrados e correções |
+| [`sessao-2026-11-16-push-develop-autenticacao-git.md`](./sessao-2026-11-16-push-develop-autenticacao-git.md) | Registro de sessão | 2026-11-16 | Push da branch `develop`, configuração permanente de credenciais Git (PAT) e erro de escopo `workflow` |
 
 ## Atalhos
 
