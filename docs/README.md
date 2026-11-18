@@ -11,6 +11,8 @@ Registros de trabalho no repositório (pt-BR). Cada arquivo é autocontido; os l
 | [`chrome-devtools-mcp.md`](./chrome-devtools-mcp.md) | Referência / how-to | 2026-11-16 | Instalação e uso do MCP Chrome DevTools (inspeção de console, rede, screenshots e performance no Chrome) |
 | [`teste-e2e-chrome-devtools.md`](./teste-e2e-chrome-devtools.md) | Registro de teste | 2026-11-16 | Teste E2E completo pelo Chrome (cadastro → pagamento → dashboard → auditoria), bugs encontrados e correções |
 | [`sessao-2026-11-16-push-develop-autenticacao-git.md`](./sessao-2026-11-16-push-develop-autenticacao-git.md) | Registro de sessão | 2026-11-16 | Push da branch `develop`, configuração permanente de credenciais Git (PAT) e erro de escopo `workflow` |
+| [`documentacao-tecnica-projeto.md`](./documentacao-tecnica-projeto.md) | Referência técnica | 2026-11-18 | Arquitetura, execução local, segurança, persistência, importação e validação |
+| [`manual-usuario-financeiro.md`](./manual-usuario-financeiro.md) | Manual de usuário | 2026-11-18 | Primeiro acesso, navegação, cadastros, operações financeiras e importação |
 
 ## Atalhos
 
