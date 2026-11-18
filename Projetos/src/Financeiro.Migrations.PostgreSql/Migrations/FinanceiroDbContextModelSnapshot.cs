@@ -1046,6 +1046,403 @@ namespace Financeiro.Migrations.PostgreSql.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportAnnotation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CellReference")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("cell_reference");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("ImportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_batch_id");
+
+                    b.Property<string>("SheetName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("sheet_name");
+
+                    b.Property<string>("SourceAuthor")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("source_author");
+
+                    b.Property<DateTimeOffset?>("SourceDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("source_date");
+
+                    b.Property<Guid>("SpaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("espaco_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "SpaceId", "Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("ImportBatchId", "SheetName", "CellReference");
+
+                    b.HasIndex("TenantId", "SpaceId", "ImportBatchId");
+
+                    b.ToTable("anotacoes_origem", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ImportAnnotation_version", "\"version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<Guid?>("ConfirmedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("confirmed_by");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("content_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<string>("ParserVersion")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("parser_version");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<Guid>("SpaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("espaco_id");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("StatisticsJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("statistics_json");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("TenantId", "SpaceId", "ContentHash")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "SpaceId", "State", "CreatedAt");
+
+                    b.ToTable("importacoes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ImportBatch_state_enum", "\"state\" IN ('Received','Analyzed','AwaitingReview','Confirmed','Failed','Cancelled')");
+
+                            t.HasCheckConstraint("CK_ImportBatch_version", "\"version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("entity_type");
+
+                    b.Property<Guid>("ImportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_batch_id");
+
+                    b.Property<string>("OccurrenceKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("occurrence_key");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("role");
+
+                    b.Property<Guid>("SourceRecordId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_record_id");
+
+                    b.Property<Guid>("SpaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("espaco_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "SpaceId", "Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("TenantId", "SpaceId", "ImportBatchId");
+
+                    b.HasIndex("TenantId", "SpaceId", "SourceRecordId");
+
+                    b.HasIndex("ImportBatchId", "SourceRecordId", "EntityType", "EntityId", "Role", "OccurrenceKey")
+                        .IsUnique();
+
+                    b.ToTable("vinculos_origem", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ImportLink_version", "\"version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportSourceRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CellReference")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("cell_reference");
+
+                    b.Property<string>("Classification")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("classification");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("decision");
+
+                    b.Property<string>("DerivedValuesJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("derived_values_json");
+
+                    b.Property<Guid>("ImportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_batch_id");
+
+                    b.Property<string>("IssueCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("issue_code");
+
+                    b.Property<string>("IssueMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("issue_message");
+
+                    b.Property<string>("NormalizedSheetName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("normalized_sheet_name");
+
+                    b.Property<string>("PrevailingSource")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("prevailing_source");
+
+                    b.Property<string>("RawContentJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("raw_content_json");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("row_number");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("severity");
+
+                    b.Property<string>("SheetName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("sheet_name");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("source_type");
+
+                    b.Property<Guid>("SpaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("espaco_id");
+
+                    b.Property<int?>("StartColumn")
+                        .HasColumnType("integer")
+                        .HasColumnName("start_column");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("ImportBatchId", "Classification");
+
+                    b.HasIndex("ImportBatchId", "Decision");
+
+                    b.HasIndex("ImportBatchId", "Severity");
+
+                    b.HasIndex("TenantId", "SpaceId", "ImportBatchId");
+
+                    b.ToTable("registros_origem", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ImportSourceRecord_classification_enum", "\"classification\" IN ('Record','Header','Section','Subtotal','Total','Model')");
+
+                            t.HasCheckConstraint("CK_ImportSourceRecord_decision_enum", "\"decision\" IN ('Pending','Approved','Rejected','Ignored')");
+
+                            t.HasCheckConstraint("CK_ImportSourceRecord_severity_enum", "\"severity\" IN ('Error','Warning','Info')");
+
+                            t.HasCheckConstraint("CK_ImportSourceRecord_source_type_enum", "\"source_type\" IN ('Annual','Installments','Anticipation','Backup','Catalog','Recurrence','Travel','Scenario')");
+
+                            t.HasCheckConstraint("CK_ImportSourceRecord_version", "\"version\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Financeiro.Domain.Entities.InformedReference", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3597,6 +3994,94 @@ namespace Financeiro.Migrations.PostgreSql.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "SpaceId")
                         .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportAnnotation", b =>
+                {
+                    b.HasOne("Financeiro.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Financeiro.Domain.Entities.FinancialSpace", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Financeiro.Domain.Entities.ImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId", "ImportBatchId")
+                        .HasPrincipalKey("TenantId", "SpaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportBatch", b =>
+                {
+                    b.HasOne("Financeiro.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Financeiro.Domain.Entities.FinancialSpace", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportLink", b =>
+                {
+                    b.HasOne("Financeiro.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Financeiro.Domain.Entities.FinancialSpace", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Financeiro.Domain.Entities.ImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId", "ImportBatchId")
+                        .HasPrincipalKey("TenantId", "SpaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Financeiro.Domain.Entities.ImportSourceRecord", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId", "SourceRecordId")
+                        .HasPrincipalKey("TenantId", "SpaceId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Financeiro.Domain.Entities.ImportSourceRecord", b =>
+                {
+                    b.HasOne("Financeiro.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Financeiro.Domain.Entities.FinancialSpace", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Financeiro.Domain.Entities.ImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SpaceId", "ImportBatchId")
+                        .HasPrincipalKey("TenantId", "SpaceId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

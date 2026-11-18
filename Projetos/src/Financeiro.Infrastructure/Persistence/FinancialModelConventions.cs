@@ -54,7 +54,9 @@ internal static partial class FinancialModelConventions
                 property.SetColumnName(column);
                 var type = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
                 if (type == typeof(string) && property.GetMaxLength() is null)
-                    property.SetMaxLength(property.Name is "ChangesJson" or "Text" or "Content" ? 8000 : property.Name.Contains("Description") || property.Name.Contains("Reason") || property.Name == "Justification" ? 1000 : 200);
+                    property.SetMaxLength(property.Name is "RawContentJson" or "DerivedValuesJson" ? int.MaxValue :
+                        property.Name is "ChangesJson" or "Text" or "Content" ? 8000 :
+                        property.Name.Contains("Description") || property.Name.Contains("Reason") || property.Name == "Justification" ? 1000 : 200);
                 if (type == typeof(decimal))
                 {
                     property.SetPrecision(property.Name == "Rate" ? 20 : 19);

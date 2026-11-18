@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { onUnauthorized, request, resetCsrf } from '../../src/shared/api/client';
+import { onUnauthorized, request, requestUpload, resetCsrf } from '../../src/shared/api/client';
 
 afterEach(() => { resetCsrf(); vi.unstubAllGlobals(); });
 describe('fronteira HTTP', () => {
@@ -19,5 +19,15 @@ describe('fronteira HTTP', () => {
     expect(handler).toHaveBeenCalledOnce();
     await expect(request('https://example.com/private')).rejects.toThrow('Endereço');
     unsubscribe();
+  });
+  it('envia multipart sem sobrescrever o boundary do navegador', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-upload' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ batchId: 'batch' }), { status: 201 }));
+    vi.stubGlobal('fetch', fetch);
+    await requestUpload('/api/v1/importacoes', new File(['xlsx'], 'dividas.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const options = fetch.mock.calls[1][1];
+    expect(options.headers['Content-Type']).toBeUndefined();
+    expect(options.body).toBeInstanceOf(FormData);
   });
 });

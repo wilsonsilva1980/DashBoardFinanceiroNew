@@ -1,5 +1,6 @@
 using Financeiro.Application.Access;
 using Financeiro.Application.Catalogs;
+using Financeiro.Application.Importacao;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,9 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger, IPr
             ReferencedCatalogException => (409, "Cadastro em uso."),
             CatalogNameConflictException => (409, "Nome de bandeira já utilizado."),
             CatalogValidationException => (400, "Dados de cadastro inválidos."),
+            ImportValidationException => (400, "Arquivo de importação inválido."),
+            ImportSizeException => (413, "O arquivo de importação excede os limites permitidos."),
+            ImportRuleException => (422, "A regra da importação não permite esta operação."),
             AccessDeniedException => (403, "Access denied."),
             RequestConflictException => (409, "Request conflicts with an earlier operation."),
             DbUpdateConcurrencyException => (409, "The record changed. Reload before retrying."),
@@ -31,7 +35,7 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger, IPr
         {
             Status = status,
             Title = title,
-            Detail = exception is CatalogValidationException or ReferencedCatalogException or CatalogNameConflictException or RequestConflictException ? exception.Message : null,
+            Detail = exception is CatalogValidationException or ImportValidationException or ImportRuleException or ReferencedCatalogException or CatalogNameConflictException or RequestConflictException ? exception.Message : null,
             Extensions = { ["traceId"] = context.TraceIdentifier, ["correlationId"] = context.TraceIdentifier }
         };
         var written = await problems.TryWriteAsync(new ProblemDetailsContext

@@ -56,6 +56,10 @@ public sealed class FinanceiroDbContext(DbContextOptions<FinanceiroDbContext> op
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<Annotation> Annotations => Set<Annotation>();
     public DbSet<InformedReference> InformedReferences => Set<InformedReference>();
+    public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<ImportSourceRecord> ImportSourceRecords => Set<ImportSourceRecord>();
+    public DbSet<ImportLink> ImportLinks => Set<ImportLink>();
+    public DbSet<ImportAnnotation> ImportAnnotations => Set<ImportAnnotation>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
     protected override void OnModelCreating(ModelBuilder model)

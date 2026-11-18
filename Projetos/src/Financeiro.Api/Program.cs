@@ -13,10 +13,13 @@ using Financeiro.Infrastructure.Recurrences;
 using Financeiro.Application.Travel;
 using Financeiro.Infrastructure.Travel;
 using Financeiro.Application.Payments;
+using Financeiro.Application.Importacao;
 using Financeiro.Infrastructure.Payments;
+using Financeiro.Infrastructure.Importacao;
 using Financeiro.Api.Security;
 using Financeiro.Infrastructure.Persistence;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddFinancialDatabase(builder.Configuration);
@@ -28,10 +31,14 @@ builder.Services.AddScoped<ITravelService, TravelService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IHistoricalSettlementService, HistoricalSettlementService>();
 builder.Services.AddScoped<IAgreementService, AgreementService>();
+builder.Services.AddScoped<IImportService, ImportService>();
+builder.Services.AddScoped<ISpreadsheetReader, ClosedXmlSpreadsheetReader>();
 builder.Services.AddScoped<IAccountPositionService, AccountPositionService>();
 builder.Services.AddScoped<IDashboardQueries, DashboardQueries>();
 builder.Services.AddScoped<IAuditQueryService, AuditQueryService>();
 builder.Services.AddProblemDetails();
+builder.Services.Configure<FormOptions>(options =>
+    options.MultipartBodyLengthLimit = SpreadsheetOptions.DefaultMaxFileBytes);
 builder.Services.AddHealthChecks();
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddControllers().AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

@@ -20,7 +20,11 @@ public static class AuditEventCatalog
         ["acordo.confirmado"] = "Acordo confirmado",
         ["titulo.cancelado"] = "Título cancelado",
         ["titulo.excluido"] = "Título excluído",
-        ["obrigacao.excluida"] = "Obrigação excluída"
+        ["obrigacao.excluida"] = "Obrigação excluída",
+        ["importacao.analisada"] = "Importação analisada",
+        ["importacao.decisao"] = "Decisão de importação registrada",
+        ["importacao.confirmada"] = "Importação confirmada",
+        ["importacao.cancelada"] = "Importação cancelada"
     };
 
     public static IReadOnlyDictionary<string, string> All => Labels;

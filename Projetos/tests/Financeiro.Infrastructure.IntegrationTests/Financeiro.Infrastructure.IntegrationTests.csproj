@@ -17,4 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Financeiro.Infrastructure/Financeiro.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../fixtures/importacao/representative-debt-workbook.xlsx" Link="fixtures/importacao/representative-debt-workbook.xlsx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

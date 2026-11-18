@@ -24,7 +24,8 @@ public static class PermissionCatalog
         "obrigacoes.visualizar", "obrigacoes.editar", "pagamentos.registrar",
         "pagamentos.estornar", "quitacoes.confirmar", "relatorios.exportar",
         "usuarios.gerenciar", "perfis.gerenciar", "auditoria.visualizar",
-        "historico.registrar", "historico.revogar", "viagens.editar", "cotacoes.editar", "faturas.editar"
+        "historico.registrar", "historico.revogar", "viagens.editar", "cotacoes.editar", "faturas.editar",
+        "importacoes.visualizar", "importacoes.executar"
     ];
 
     public static IReadOnlyDictionary<string, string[]> BaselineRoles { get; } = new Dictionary<string, string[]>

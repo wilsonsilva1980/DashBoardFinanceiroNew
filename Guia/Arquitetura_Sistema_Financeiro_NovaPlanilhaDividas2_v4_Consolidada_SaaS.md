@@ -1411,3 +1411,9 @@ As referências técnicas e as versões citadas foram herdadas da consulta de 09
 - [React — anúncio 19.3 citado no documento técnico](https://react.dev/blog/2026/09/09/react-19-3).
 
 A entrega desta tarefa é exclusivamente este novo Markdown. Planilha e documentos anteriores foram preservados. Os trechos Compose, C#, CLI e wireframes são especificações a implementar; não equivalem a sistema funcional nem a infraestrutura/testes executados.
+
+### Atualização de implementação — importação revisável
+
+A evolução `add-spreadsheet-debt-import` implementa a entrega futura de importação como fluxo separado e revisável. O endpoint aceita `.xlsx` até 10 MB, limitado a 20 abas, 5.000 linhas por aba, 200 colunas, 500.000 células e 200 issues. ClosedXML permanece restrito à infraestrutura; o arquivo original não é retido depois da análise.
+
+O staging preserva abas ocultas, fórmulas/cache, comentários, valores brutos, referências de célula e decisões. A confirmação aplica apenas registros aprovados em transação atômica, com hash/chaves de ocorrência, vínculos de origem e auditoria segura. Parcelas têm precedência para valor e número; fontes anuais complementam responsável e planejamento; `2027`, `BKP` e antecipação são previsão/cenário; `P`/`Pago` não cria pagamento bancário. Acesso requer permissões separadas de visualização/execução e CSRF, com comportamento equivalente em PostgreSQL e SQL Server.

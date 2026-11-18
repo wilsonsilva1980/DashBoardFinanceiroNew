@@ -38,7 +38,7 @@ As senhas em `appsettings.Development.json` existem apenas para o Docker local e
 
 Para SQL Server, a connection string usa `Server=localhost,51433;Database=financeiro;User Id=sa;Encrypt=True;TrustServerCertificate=True`. O banco `financeiro` é criado/aplicado pelo migrator (veja [Migrations](#migrations)). `sa` e confiança no certificado local são exclusivos do desenvolvimento; produção exige usuário restrito e certificado válido.
 Em outro terminal, entre em `Projetos/frontend/` e execute `npm run dev`.
-O frontend encaminha `/api` para a API local. Saúde da API: `/health`.
+O frontend encaminha `/api` para a API local. Saúde da API: `/health`. A rota `/importacao` exige as permissões `importacoes.visualizar` e `importacoes.executar`.
 
 O backend já oferece autenticação, onboarding, seleção de contexto e proteção de acessos. As telas e operações dos módulos financeiros permanecem nas tarefas seguintes.
 
@@ -98,6 +98,14 @@ Em Development, o contrato está em `/openapi/v1.json` e o Swagger em `/swagger/
 - Logs estruturados registram tipo de falha, status, correlação e caminho. Cargas, parâmetros SQL, cookies, senhas, mensagens sensíveis de exceção e identificadores bancários literais não devem ser registrados.
 - Operações confirmadas e sensíveis registram auditoria no espaço ativo (ex.: onboarding, gestão de acesso, confirmações/reversões de pagamento, liquidações históricas e revogações, confirmação de acordos, cancelamentos/exclusões auditáveis). A correlação da requisição é preservada no registro de auditoria.
 
+## Importação de planilhas
+
+`POST /api/v1/importacoes` aceita somente `.xlsx` de até 10 MB, com no máximo 20 abas, 5.000 linhas por aba, 200 colunas, 500.000 células e 200 issues. O parser usa ClosedXML apenas em `Financeiro.Infrastructure`, lê abas ocultas e valores cacheados sem recalcular fórmulas, descarta o binário após a análise e mantém referências de célula, comentários e decisões no staging.
+
+O fluxo é upload → análise → revisão → decisão → confirmação. Confirmações usam transação/execution strategy, vínculos de origem e chaves de ocorrência para idempotência. Parcelas prevalecem sobre valores e números de parcela; fontes anuais complementam responsável e planejamento. Abas `2027`, `BKP` e antecipação permanecem como previsão/cenário e não entram nos totais efetivos. Marcadores `P`/`Pago` geram evidência de liquidação histórica sem criar pagamento bancário.
+
+O lote confirmado é imutável; o arquivo original não é retido. Decisões, cancelamentos, confirmações e resultados são auditados sem conteúdo do workbook. Todas as mutações exigem cookie de sessão e `X-CSRF-TOKEN`; PostgreSQL e SQL Server usam migrations e contratos equivalentes.
+
 ## Dashboard e reconciliação
 
 - `GET /api/v1/dashboard/resumo?from=YYYY-MM-DD&until=YYYY-MM-DD&currency=BRL` retorna resumos por categoria, responsável, vencimento, evolução mensal e posições, distinguindo valores efetivos, previsão, em aberto, parciais, pagos e vencidos.
@@ -113,7 +121,7 @@ Em Development, o contrato está em `/openapi/v1.json` e o Swagger em `/swagger/
 
 ## Exclusões conhecidas da primeira versão
 
-- Sem importação/parsing de planilhas, sincronização bancária, faturamento SaaS, livro completo de receitas ou contabilidade de transferências.
+- Sem sincronização bancária, faturamento SaaS, livro completo de receitas ou contabilidade de transferências. A importação `.xlsx` descrita acima não substitui a revisão manual.
 - Sem seleção de provider por cliente e sem migração automática entre PostgreSQL e SQL Server.
 - Totais/comentários/fórmulas históricos da planilha não são tratados como transações financeiras verificadas; fatos desconhecidos permanecem desconhecidos.
 - Interface de matrícula/gestão MFA ainda não faz parte desta etapa (política/extensões existem no backend).

@@ -15,10 +15,11 @@ export async function request<T>(path: string, options: { method?: string; body?
   const method = options.method ?? 'GET';
   const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
   if (mutation && !csrfToken) await refreshCsrf();
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const response = await fetch(path, {
     method, signal: options.signal, credentials: 'same-origin', cache: 'no-store',
-    headers: { Accept: 'application/json', ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(mutation ? { 'X-CSRF-TOKEN': csrfToken! } : {}) },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    headers: { Accept: 'application/json', ...(!isFormData && options.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(mutation ? { 'X-CSRF-TOKEN': csrfToken! } : {}) },
+    body: options.body === undefined ? undefined : isFormData ? options.body as FormData : JSON.stringify(options.body),
   });
   if (!response.ok) {
     if (response.status === 401) { resetCsrf(); unauthorized?.(); }
@@ -28,5 +29,10 @@ export async function request<T>(path: string, options: { method?: string; body?
     throw new ApiError(response.status, problem.detail || errors || (response.status === 401 ? 'Email, senha ou código não conferem. Verifique e tente novamente.' : response.status >= 500 ? 'O serviço não respondeu. Tente novamente.' : response.status === 403 ? 'Você não tem permissão para esta ação no espaço ativo.' : response.status === 404 ? 'Cadastro não encontrado no espaço ativo.' : problem.title) || 'Não foi possível concluir a operação.');
   }
   return response.status === 204 ? undefined as T : response.json() as Promise<T>;
+}
+export function requestUpload<T>(path: string, file: File, signal?: AbortSignal) {
+  const body = new FormData();
+  body.append('file', file, file.name);
+  return request<T>(path, { method: 'POST', body, signal });
 }
 export const get = <T>(path: string, signal?: AbortSignal) => request<T>(path, { signal });

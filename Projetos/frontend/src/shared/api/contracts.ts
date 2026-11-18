@@ -93,3 +93,13 @@ export interface DashboardSummary {
   positions: DashboardAccountPositionSummary[];
   reconciliationIndicators: DashboardReconciliationIndicator[];
 }
+export type ImportState = 'Received' | 'Analyzed' | 'AwaitingReview' | 'Confirmed' | 'Failed' | 'Cancelled';
+export type ImportDecision = 'Pending' | 'Approved' | 'Rejected' | 'Ignored';
+export type ImportSeverity = 'Info' | 'Warning' | 'Error';
+export interface ImportAnalysisResult { batchId: string; state: ImportState; totalRows: number; eligibleRows: number; errorCount: number; warningCount: number; infoCount: number }
+export interface ImportBatch { id: string; originalFileName: string; sizeBytes: number; parserVersion: string; state: ImportState; statisticsJson: string; version: number; createdAt: string }
+export interface ImportRow {
+  id: string; sheetName: string; rowNumber: number; cellReference: string; sourceType: string; classification: string;
+  derivedValuesJson: string; issueCode: string | null; issueMessage: string | null; severity: ImportSeverity; decision: ImportDecision; version: number;
+}
+export interface ImportConfirmation { batchId: string; state: ImportState; created: number; reused: number; rejected: number; failed: number }
