@@ -24,6 +24,7 @@ test('importação revisa, decide e confirma registros com CSRF', async ({ page 
   });
   await page.goto('/importacao');
   await expect(page.getByRole('heading', { name: 'Importação de planilha' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Baixar modelo XLSX' })).toHaveAttribute('href', '/modelos/planilha-financeiro-modelo.xlsx');
   await page.getByLabel('Arquivo XLSX').setInputFiles({ name: 'dividas.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('xlsx') });
   await expect(page.getByText('dividas.xlsx', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Revisar' }).click();

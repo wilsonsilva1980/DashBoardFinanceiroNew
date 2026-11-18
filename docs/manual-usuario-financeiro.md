@@ -131,12 +131,14 @@ O menu **Importação** aceita arquivos `.xlsx` de até 10 MB.
 ### Como importar
 
 1. Abra **Importação**.
-2. Arraste a planilha para a área indicada ou clique para selecionar o arquivo.
-3. Aguarde a análise.
-4. Revise os registros e os avisos.
-5. Para cada registro, escolha **Aprovar**, **Rejeitar** ou **Ignorar**.
-6. Corrija ou rejeite registros com erro.
-7. Clique em **Confirmar aprovados**.
+2. Se necessário, clique em **Baixar modelo XLSX** para obter uma planilha de exemplo.
+3. Substitua os exemplos pelos seus dados, preservando os cabeçalhos das abas **Dívidas**, **Parcelas** e **Viagens**. A aba **Instruções** explica o preenchimento.
+4. Arraste a planilha para a área indicada ou clique para selecionar o arquivo.
+5. Aguarde a análise.
+6. Revise os registros e os avisos.
+7. Para cada registro, escolha **Aprovar**, **Rejeitar** ou **Ignorar**.
+8. Corrija ou rejeite registros com erro.
+9. Clique em **Confirmar aprovados**.
 
 O sistema analisa abas visíveis e ocultas, preserva referências de células e comentários no lote de revisão e disponibiliza um relatório CSV.
 

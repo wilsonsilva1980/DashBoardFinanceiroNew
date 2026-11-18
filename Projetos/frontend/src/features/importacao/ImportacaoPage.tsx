@@ -65,6 +65,13 @@ export function ImportacaoPage() {
   return <section className="page-stack">
     <header className="page-heading"><div><p className="eyebrow">Migração controlada</p><h1>Importação de planilha</h1><p className="muted">Analise, revise e confirme dados do arquivo sem criar pagamentos bancários automaticamente.</p></div></header>
     <div className="data-card">
+      <div className="table-toolbar">
+        <div><strong>Planilha modelo</strong><p className="muted">Use este exemplo para preparar arquivos compatíveis com a importação.</p></div>
+        <a className="secondary" href="/modelos/planilha-financeiro-modelo.xlsx" download>Baixar modelo XLSX</a>
+      </div>
+      <p className="field-hint">O modelo contém exemplos nas abas Dívidas, Parcelas, Viagens e Instruções. Substitua os exemplos pelos seus dados e mantenha os cabeçalhos.</p>
+    </div>
+    <div className="data-card">
       <div
         className="dropzone"
         role="button"
