@@ -43,12 +43,44 @@ public sealed record ImportRowEntry(
     string CellReference,
     ImportSourceType SourceType,
     ImportRecordClass Classification,
+    int? Month,
+    string OccurrenceKey,
+    string OriginalValuesJson,
     string DerivedValuesJson,
     string? IssueCode,
     string? IssueMessage,
     ImportIssueSeverity Severity,
     ImportDecision Decision,
+    long Version,
+    IReadOnlyList<ImportIssueEntry> Issues);
+
+public sealed record ImportIssueEntry(
+    Guid Id,
+    string Code,
+    string Message,
+    ImportIssueSeverity Severity,
+    bool Resolved);
+
+public sealed record ImportCorrectionInput(
+    string FieldName,
+    string? ValueJson,
+    string Reason,
     long Version);
+
+public sealed record ImportBatchDecisionInput(
+    IReadOnlyList<ImportDecisionItem> Items);
+
+public sealed record ImportDecisionItem(Guid RowId, ImportDecision Decision, long Version);
+public sealed record ImportReconciliationEntry(
+    Guid Id,
+    Guid SourceRecordId,
+    Guid CandidateRecordId,
+    string MatchKind,
+    decimal Confidence,
+    string Reason,
+    string Decision,
+    long Version);
+public sealed record ImportReconciliationDecisionInput(string Decision, long Version);
 
 public sealed record ImportPendingSummary(int Errors, int Warnings, int Pending);
 public sealed record ImportDecisionInput(ImportDecision Decision, long Version);
@@ -62,6 +94,18 @@ public sealed record ImportConfirmationResult(
 
 public interface IImportService
 {
+    Task<PageResult<ImportBatchEntry>> ListBatchesAsync(
+        int page = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ImportReconciliationEntry>> ListReconciliationAsync(
+        Guid batchId,
+        CancellationToken cancellationToken = default);
+    Task<ImportReconciliationEntry> DecideReconciliationAsync(
+        Guid batchId,
+        Guid candidateId,
+        ImportReconciliationDecisionInput input,
+        CancellationToken cancellationToken = default);
     Task<ImportBatchEntry> GetAsync(Guid batchId, CancellationToken cancellationToken = default);
     Task<ImportAnalysisResult> AnalyzeAsync(
         Stream workbook,
@@ -78,6 +122,15 @@ public interface IImportService
         Guid batchId,
         Guid rowId,
         ImportDecisionInput input,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ImportRowEntry>> DecideBatchAsync(
+        Guid batchId,
+        ImportBatchDecisionInput input,
+        CancellationToken cancellationToken = default);
+    Task<ImportRowEntry> CorrectAsync(
+        Guid batchId,
+        Guid rowId,
+        ImportCorrectionInput input,
         CancellationToken cancellationToken = default);
     Task<ImportConfirmationResult> ConfirmAsync(
         Guid batchId,

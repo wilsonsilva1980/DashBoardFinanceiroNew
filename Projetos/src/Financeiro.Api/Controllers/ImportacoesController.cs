@@ -8,6 +8,14 @@ namespace Financeiro.Api.Controllers;
 [Route("api/v1/importacoes")]
 public sealed class ImportacoesController(IImportService imports) : ControllerBase
 {
+    [Authorize(Policy = "importacoes.visualizar")]
+    [HttpGet]
+    public Task<Financeiro.Application.Catalogs.PageResult<ImportBatchEntry>> History(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 25,
+        CancellationToken cancellationToken = default) =>
+        imports.ListBatchesAsync(page, pageSize, cancellationToken);
+
     [Authorize(Policy = "importacoes.executar")]
     [HttpPost]
     [RequestSizeLimit(10 * 1024 * 1024)]
@@ -41,6 +49,20 @@ public sealed class ImportacoesController(IImportService imports) : ControllerBa
         imports.PendingAsync(batchId, cancellationToken);
 
     [Authorize(Policy = "importacoes.visualizar")]
+    [HttpGet("{batchId:guid}/reconciliacao")]
+    public Task<IReadOnlyList<ImportReconciliationEntry>> Reconciliation(Guid batchId, CancellationToken cancellationToken) =>
+        imports.ListReconciliationAsync(batchId, cancellationToken);
+
+    [Authorize(Policy = "importacoes.executar")]
+    [HttpPost("{batchId:guid}/reconciliacao/{candidateId:guid}")]
+    public Task<ImportReconciliationEntry> DecideReconciliation(
+        Guid batchId,
+        Guid candidateId,
+        ImportReconciliationDecisionInput input,
+        CancellationToken cancellationToken) =>
+        imports.DecideReconciliationAsync(batchId, candidateId, input, cancellationToken);
+
+    [Authorize(Policy = "importacoes.visualizar")]
     [HttpGet("{batchId:guid}/relatorio")]
     public async Task<IActionResult> Report(Guid batchId, [FromQuery] ImportRowFilter filter, CancellationToken cancellationToken)
     {
@@ -56,6 +78,23 @@ public sealed class ImportacoesController(IImportService imports) : ControllerBa
         ImportDecisionInput input,
         CancellationToken cancellationToken) =>
         imports.DecideAsync(batchId, rowId, input, cancellationToken);
+
+    [Authorize(Policy = "importacoes.executar")]
+    [HttpPost("{batchId:guid}/decisoes")]
+    public Task<IReadOnlyList<ImportRowEntry>> DecideBatch(
+        Guid batchId,
+        ImportBatchDecisionInput input,
+        CancellationToken cancellationToken) =>
+        imports.DecideBatchAsync(batchId, input, cancellationToken);
+
+    [Authorize(Policy = "importacoes.executar")]
+    [HttpPost("{batchId:guid}/registros/{rowId:guid}/correcao")]
+    public Task<ImportRowEntry> Correct(
+        Guid batchId,
+        Guid rowId,
+        ImportCorrectionInput input,
+        CancellationToken cancellationToken) =>
+        imports.CorrectAsync(batchId, rowId, input, cancellationToken);
 
     [Authorize(Policy = "importacoes.executar")]
     [HttpPost("{batchId:guid}/confirmar")]

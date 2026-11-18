@@ -21,7 +21,29 @@ public sealed class ImportService(
     ISpreadsheetReader reader,
     IAuditWriter auditWriter) : IImportService
 {
-    private const string ParserVersion = "2026.11.1";
+    private const string ParserVersion = "2026.11.2";
+
+    public async Task<PageResult<ImportBatchEntry>> ListBatchesAsync(
+        int page = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default)
+    {
+        await DemandViewAsync(cancellationToken);
+        if (page < 1 || pageSize is < 1 or > 100)
+            throw new ImportValidationException("Paginação de importação inválida.");
+        var query = db.ImportBatches.AsNoTracking().OrderByDescending(x => x.CreatedAt);
+        var total = await query.CountAsync(cancellationToken);
+        var batches = await query.Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(cancellationToken);
+        return new(batches.Select(batch => new ImportBatchEntry(
+            batch.Id,
+            batch.OriginalFileName,
+            batch.SizeBytes,
+            batch.ParserVersion,
+            batch.State,
+            batch.StatisticsJson,
+            batch.Version,
+            batch.CreatedAt)).ToArray(), total, page, pageSize);
+    }
 
     public async Task<ImportBatchEntry> GetAsync(Guid batchId, CancellationToken cancellationToken = default)
     {
@@ -30,6 +52,47 @@ public sealed class ImportService(
             ?? throw new CatalogNotFoundException();
         return new(batch.Id, batch.OriginalFileName, batch.SizeBytes, batch.ParserVersion, batch.State,
             batch.StatisticsJson, batch.Version, batch.CreatedAt);
+    }
+
+    public async Task<IReadOnlyList<ImportReconciliationEntry>> ListReconciliationAsync(
+        Guid batchId,
+        CancellationToken cancellationToken = default)
+    {
+        await DemandViewAsync(cancellationToken);
+        return await db.ImportReconciliationCandidates.AsNoTracking()
+            .Where(x => x.ImportBatchId == batchId)
+            .OrderBy(x => x.SourceRecordId).ThenBy(x => x.CandidateRecordId)
+            .Select(x => new ImportReconciliationEntry(
+                x.Id, x.SourceRecordId, x.CandidateRecordId, x.MatchKind,
+                x.Confidence, x.Reason, x.Decision.ToString(), x.Version))
+            .ToArrayAsync(cancellationToken);
+    }
+
+    public async Task<ImportReconciliationEntry> DecideReconciliationAsync(
+        Guid batchId,
+        Guid candidateId,
+        ImportReconciliationDecisionInput input,
+        CancellationToken cancellationToken = default)
+    {
+        await DemandAsync(cancellationToken);
+        if (!Enum.TryParse<ImportReconciliationDecision>(input.Decision, true, out var decision) ||
+            decision is ImportReconciliationDecision.Pending)
+            throw new ImportValidationException("A decisão de reconciliação é inválida.");
+        var candidate = await db.ImportReconciliationCandidates.SingleOrDefaultAsync(
+            x => x.Id == candidateId && x.ImportBatchId == batchId, cancellationToken)
+            ?? throw new CatalogNotFoundException();
+        if (candidate.Version != input.Version)
+            throw new RequestConflictException("O vínculo foi alterado. Recarregue a reconciliação.");
+        candidate.Decision = decision;
+        await db.SaveChangesAsync(cancellationToken);
+        auditWriter.Record("importacao.reconciliacao", "ImportReconciliationCandidate", candidate.Id, new
+        {
+            batchId,
+            decision = decision.ToString()
+        });
+        return new(candidate.Id, candidate.SourceRecordId, candidate.CandidateRecordId,
+            candidate.MatchKind, candidate.Confidence, candidate.Reason,
+            candidate.Decision.ToString(), candidate.Version);
     }
 
     public async Task<ImportAnalysisResult> AnalyzeAsync(
@@ -48,7 +111,10 @@ public sealed class ImportService(
             cancellationToken);
         var hash = Convert.ToHexString(SHA256.HashData(validated));
         validated.Position = 0;
-        var existing = await db.ImportBatches.SingleOrDefaultAsync(x => x.ContentHash == hash, cancellationToken);
+        var existing = await db.ImportBatches
+            .Where(x => x.ContentHash == hash && x.State != ImportState.Cancelled)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
         if (existing is not null)
             return await ResultAsync(existing.Id, existing.State, cancellationToken);
 
@@ -74,60 +140,69 @@ public sealed class ImportService(
             var issues = parsedRows.SelectMany(SpreadsheetIssueDetector.Detect).ToArray();
             var duplicateIssues = SpreadsheetIssueDetector.DetectDuplicates(parsedRows);
             issues = issues.Concat(duplicateIssues).Take(options.MaxIssues).ToArray();
-            var issueByRow = parsedRows.ToDictionary(
-                row => (row.SheetName, row.RowNumber),
-                row => SpreadsheetIssueDetector.Detect(row));
 
             var sourceRecords = new List<ImportSourceRecord>();
+            var sourceIssues = new List<ImportIssue>();
             var annotations = new List<ImportAnnotation>();
-            foreach (var sheet in sheets)
+            foreach (var parsed in parsedRows)
             {
-                foreach (var row in sheet.Rows)
+                var row = sheets.Single(sheet => sheet.Name == parsed.SheetName).Rows
+                    .SingleOrDefault(candidate => candidate.RowNumber == parsed.RowNumber);
+                if (row is null) continue;
+                var rowIssues = SpreadsheetIssueDetector.Detect(parsed).ToList();
+                if (parsed.OccurrenceKey.Length > 0 &&
+                    duplicateIssues.Any(issue => issue.Message.Contains("ocorrência", StringComparison.OrdinalIgnoreCase)))
+                    rowIssues.AddRange(duplicateIssues);
+                var severity = rowIssues.Count == 0 ? ImportIssueSeverity.Info : rowIssues.Max(x => x.Severity);
+                var firstIssue = rowIssues.FirstOrDefault();
+                var source = new ImportSourceRecord
                 {
-                    var parsed = parsedRows.FirstOrDefault(x => x.SheetName == sheet.Name && x.RowNumber == row.RowNumber);
-                    if (parsed is null) continue;
-                    var rowIssues = issueByRow.GetValueOrDefault((sheet.Name, row.RowNumber)) ?? [];
-                    var severity = rowIssues.Count == 0 ? ImportIssueSeverity.Info : rowIssues.Max(x => x.Severity);
-                    var firstIssue = rowIssues.FirstOrDefault();
-                    var source = new ImportSourceRecord
+                    TenantId = batch.TenantId,
+                    SpaceId = batch.SpaceId,
+                    ImportBatchId = batch.Id,
+                    SheetName = parsed.SheetName,
+                    NormalizedSheetName = SpreadsheetTextNormalizer.Normalize(parsed.SheetName),
+                    SourceType = parsed.SourceType,
+                    RowNumber = parsed.RowNumber,
+                    StartColumn = parsed.StartColumn,
+                    Month = parsed.Month,
+                    CellReference = parsed.CellReference,
+                    OccurrenceKey = parsed.OccurrenceKey.Length == 0
+                        ? $"{parsed.SheetName}:{parsed.RowNumber}:{parsed.CellReference}"
+                        : parsed.OccurrenceKey,
+                    Classification = parsed.Classification,
+                    RawContentJson = JsonSerializer.Serialize(new { values = parsed.Values, cells = row.Cells }),
+                    OriginalValuesJson = JsonSerializer.Serialize(parsed.OriginalValues ?? parsed.Values),
+                    DerivedValuesJson = JsonSerializer.Serialize(parsed.DerivedValues),
+                    IssueCode = firstIssue?.Code,
+                    IssueMessage = firstIssue?.Message,
+                    Severity = severity,
+                    Decision = ImportDecision.Pending
+                };
+                sourceRecords.Add(source);
+                foreach (var issue in rowIssues)
+                    sourceIssues.Add(new ImportIssue
+                    {
+                        TenantId = batch.TenantId,
+                        SpaceId = batch.SpaceId,
+                        CreatedBy = actor.UserId,
+                        ImportBatchId = batch.Id,
+                        ImportSourceRecordId = source.Id,
+                        Code = issue.Code,
+                        Message = issue.Message,
+                        Severity = issue.Severity
+                    });
+                foreach (var cell in row.Cells.Where(cell => cell.CommentText is not null))
+                    annotations.Add(new ImportAnnotation
                     {
                         TenantId = batch.TenantId,
                         SpaceId = batch.SpaceId,
                         ImportBatchId = batch.Id,
-                        SheetName = sheet.Name,
-                        NormalizedSheetName = SpreadsheetTextNormalizer.Normalize(sheet.Name),
-                        SourceType = parsed.SourceType,
-                        RowNumber = row.RowNumber,
-                        StartColumn = parsed.StartColumn,
-                        CellReference = parsed.CellReference,
-                        Classification = parsed.Classification,
-                        RawContentJson = JsonSerializer.Serialize(new
-                        {
-                            values = parsed.Values,
-                            cells = row.Cells
-                        }),
-                        DerivedValuesJson = JsonSerializer.Serialize(parsed.DerivedValues),
-                        IssueCode = firstIssue?.Code,
-                        IssueMessage = firstIssue?.Message,
-                        Severity = severity,
-                        Decision = ImportDecision.Pending
-                    };
-                    sourceRecords.Add(source);
-                    foreach (var cell in row.Cells.Where(cell => cell.CommentText is not null))
-                    {
-                        annotations.Add(new ImportAnnotation
-                        {
-                            TenantId = batch.TenantId,
-                            SpaceId = batch.SpaceId,
-                            ImportBatchId = batch.Id,
-                            SheetName = sheet.Name,
-                            CellReference = cell.Address,
-                            SourceAuthor = cell.CommentAuthor,
-                            Text = cell.CommentText!
-                        });
-                    }
-                }
-
+                        SheetName = parsed.SheetName,
+                        CellReference = cell.Address,
+                        SourceAuthor = cell.CommentAuthor,
+                        Text = cell.CommentText!
+                    });
             }
 
             batch.State = issues.Length == 0 ? ImportState.Analyzed : ImportState.AwaitingReview;
@@ -140,7 +215,9 @@ public sealed class ImportService(
                 info = issues.Count(x => x.Severity == ImportIssueSeverity.Info)
             });
             db.ImportSourceRecords.AddRange(sourceRecords);
+            db.ImportIssues.AddRange(sourceIssues);
             db.ImportAnnotations.AddRange(annotations);
+            db.ImportReconciliationCandidates.AddRange(BuildReconciliationCandidates(batch, sourceRecords));
             await db.SaveChangesAsync(cancellationToken);
             return new(
                 batch.Id,
@@ -177,29 +254,20 @@ public sealed class ImportService(
         var total = await query.CountAsync(cancellationToken);
         var rows = await query.OrderBy(x => x.SheetName).ThenBy(x => x.RowNumber).ThenBy(x => x.Id)
             .Skip(offset).Take(filter.PageSize).ToArrayAsync(cancellationToken);
-        return new(rows.Select(x => new ImportRowEntry(
-            x.Id,
-            x.SheetName,
-            x.RowNumber,
-            x.CellReference,
-            x.SourceType,
-            x.Classification,
-            x.DerivedValuesJson,
-            x.IssueCode,
-            x.IssueMessage,
-            x.Severity,
-            x.Decision,
-            x.Version)).ToArray(), total, filter.Page, filter.PageSize);
+        var entries = new List<ImportRowEntry>(rows.Length);
+        foreach (var row in rows)
+            entries.Add(await ToEntryAsync(row, cancellationToken));
+        return new(entries, total, filter.Page, filter.PageSize);
     }
 
     public async Task<ImportPendingSummary> PendingAsync(Guid batchId, CancellationToken cancellationToken = default)
     {
         await DemandViewAsync(cancellationToken);
         var rows = await db.ImportSourceRecords.AsNoTracking()
-            .Where(x => x.ImportBatchId == batchId)
+            .Where(x => x.ImportBatchId == batchId && x.Classification == ImportRecordClass.Record)
             .ToArrayAsync(cancellationToken);
         return new(
-            rows.Count(x => x.Severity == ImportIssueSeverity.Error),
+            rows.Count(x => x.Severity == ImportIssueSeverity.Error && x.Decision == ImportDecision.Approved),
             rows.Count(x => x.Severity == ImportIssueSeverity.Warning),
             rows.Count(x => x.Decision == ImportDecision.Pending));
     }
@@ -268,19 +336,151 @@ public sealed class ImportService(
             row.RowNumber
         });
         await db.SaveChangesAsync(cancellationToken);
-        return new(
-            row.Id,
+        return await ToEntryAsync(row, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ImportRowEntry>> DecideBatchAsync(
+        Guid batchId,
+        ImportBatchDecisionInput input,
+        CancellationToken cancellationToken = default)
+    {
+        await DemandAsync(cancellationToken);
+        if (input.Items.Count == 0 || input.Items.Select(x => x.RowId).Distinct().Count() != input.Items.Count)
+            throw new ImportValidationException("Selecione ao menos um registro distinto.");
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var batch = await db.ImportBatches.SingleOrDefaultAsync(x => x.Id == batchId, cancellationToken)
+            ?? throw new CatalogNotFoundException();
+        if (batch.State is ImportState.Confirmed or ImportState.Cancelled)
+            throw new ImportRuleException("O lote não aceita alterações após seu encerramento.");
+        var ids = input.Items.Select(x => x.RowId).ToArray();
+        var rows = await db.ImportSourceRecords
+            .Where(x => x.ImportBatchId == batchId && ids.Contains(x.Id))
+            .ToArrayAsync(cancellationToken);
+        if (rows.Length != input.Items.Count)
+            throw new CatalogNotFoundException();
+        foreach (var item in input.Items)
+        {
+            var row = rows.Single(x => x.Id == item.RowId);
+            if (row.Version != item.Version)
+                throw new RequestConflictException("Um dos registros foi alterado. Recarregue a prévia antes de decidir.");
+            if (item.Decision is not (ImportDecision.Approved or ImportDecision.Rejected or ImportDecision.Ignored))
+                throw new ImportValidationException("A decisão de importação é inválida.");
+            row.Decision = item.Decision;
+            row.DecidedBy = actor.UserId;
+            row.DecidedAt = DateTimeOffset.UtcNow;
+        }
+        auditWriter.Record("importacao.decisao_lote", "ImportBatch", batchId, new { count = rows.Length });
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await Task.WhenAll(rows.Select(row => ToEntryAsync(row, cancellationToken)));
+    }
+
+    public async Task<ImportRowEntry> CorrectAsync(
+        Guid batchId,
+        Guid rowId,
+        ImportCorrectionInput input,
+        CancellationToken cancellationToken = default)
+    {
+        await DemandAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(input.FieldName) || string.IsNullOrWhiteSpace(input.Reason))
+            throw new ImportValidationException("Informe o campo e o motivo da correção.");
+        var batch = await db.ImportBatches.SingleOrDefaultAsync(x => x.Id == batchId, cancellationToken)
+            ?? throw new CatalogNotFoundException();
+        var row = await db.ImportSourceRecords.SingleOrDefaultAsync(
+            x => x.Id == rowId && x.ImportBatchId == batchId, cancellationToken)
+            ?? throw new CatalogNotFoundException();
+        if (row.Version != input.Version)
+            throw new RequestConflictException("O registro foi alterado. Recarregue a prévia antes de corrigir.");
+        if (batch.State == ImportState.Confirmed)
+        {
+            var link = await db.ImportLinks.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.ImportBatchId == batchId && x.SourceRecordId == rowId &&
+                x.EntityType == "PayableTitle" && x.Role == "effective", cancellationToken);
+            if (link is null)
+                throw new ImportRuleException("O registro confirmado não possui vínculo financeiro corrigível.");
+            var title = await db.PayableTitles.SingleAsync(x => x.Id == link.EntityId, cancellationToken);
+            switch (input.FieldName.Trim().ToLowerInvariant())
+            {
+                case "valor":
+                case "valororiginal":
+                case "originalamount":
+                    title.OriginalAmount = ParseDecimal(input.ValueJson) ??
+                        throw new ImportValidationException("O valor corrigido é inválido.");
+                    break;
+                default:
+                    throw new ImportValidationException("Após a confirmação, somente o valor do título pode ser corrigido.");
+            }
+            auditWriter.Record("importacao.correcao_pos_confirmacao", "PayableTitle", title.Id, new
+            {
+                batchId,
+                sourceRecordId = rowId,
+                input.FieldName,
+                input.ValueJson,
+                input.Reason
+            });
+            await db.SaveChangesAsync(cancellationToken);
+            return await ToEntryAsync(row, cancellationToken);
+        }
+        if (batch.State == ImportState.Cancelled)
+            throw new ImportRuleException("O lote não aceita correções após seu encerramento.");
+        var derived = JsonSerializer.Deserialize<Dictionary<string, string?>>(row.DerivedValuesJson)
+            ?? new Dictionary<string, string?>(StringComparer.Ordinal);
+        derived[input.FieldName] = input.ValueJson;
+        db.ImportCorrections.Add(new ImportCorrection
+        {
+            TenantId = batch.TenantId,
+            SpaceId = batch.SpaceId,
+            CreatedBy = actor.UserId,
+            ImportBatchId = batch.Id,
+            ImportSourceRecordId = row.Id,
+            FieldName = input.FieldName,
+            OriginalValueJson = row.DerivedValuesJson,
+            CorrectedValueJson = input.ValueJson,
+            Reason = input.Reason
+        });
+        row.DerivedValuesJson = JsonSerializer.Serialize(derived);
+        row.Decision = ImportDecision.Pending;
+        var parsed = new ParsedSpreadsheetRow(
             row.SheetName,
-            row.RowNumber,
-            row.CellReference,
+            false,
             row.SourceType,
+            row.RowNumber,
+            row.StartColumn ?? 1,
+            row.CellReference,
             row.Classification,
-            row.DerivedValuesJson,
-            row.IssueCode,
-            row.IssueMessage,
-            row.Severity,
-            row.Decision,
-            row.Version);
+            JsonSerializer.Deserialize<Dictionary<string, string?>>(row.OriginalValuesJson) ?? [],
+            derived,
+            row.Month,
+            row.OccurrenceKey);
+        var revalidatedIssues = SpreadsheetIssueDetector.Detect(parsed);
+        var primaryIssue = revalidatedIssues.FirstOrDefault();
+        row.IssueCode = primaryIssue?.Code;
+        row.IssueMessage = primaryIssue?.Message;
+        row.Severity = primaryIssue?.Severity ?? ImportIssueSeverity.Info;
+        await db.ImportIssues.Where(x => x.ImportSourceRecordId == row.Id && !x.Resolved)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Resolved, true)
+                .SetProperty(x => x.ResolvedBy, actor.UserId)
+                .SetProperty(x => x.ResolvedAt, DateTimeOffset.UtcNow), cancellationToken);
+        db.ImportIssues.AddRange(revalidatedIssues.Select(issue => new ImportIssue
+        {
+            TenantId = batch.TenantId,
+            SpaceId = batch.SpaceId,
+            CreatedBy = actor.UserId,
+            ImportBatchId = batch.Id,
+            ImportSourceRecordId = row.Id,
+            Code = issue.Code,
+            Message = issue.Message,
+            Severity = issue.Severity
+        }));
+        auditWriter.Record("importacao.correcao", "ImportSourceRecord", row.Id, new
+        {
+            batchId,
+            input.FieldName,
+            input.Reason
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        return await ToEntryAsync(row, cancellationToken);
     }
 
     public async Task<ImportConfirmationResult> ConfirmAsync(
@@ -304,10 +504,20 @@ public sealed class ImportService(
 
                 var rows = await db.ImportSourceRecords
                     .Where(x => x.ImportBatchId == batchId && x.Decision == ImportDecision.Approved)
-                    .OrderBy(x => x.SheetName).ThenBy(x => x.RowNumber).ThenBy(x => x.Id)
+                    .OrderBy(x => x.SourceType == ImportSourceType.Installments ? 0 : 1)
+                    .ThenBy(x => x.SheetName).ThenBy(x => x.RowNumber).ThenBy(x => x.Id)
                     .ToArrayAsync(cancellationToken);
-                if (rows.Any(x => x.Severity == ImportIssueSeverity.Error))
+                var eligible = await db.ImportSourceRecords
+                    .Where(x => x.ImportBatchId == batchId && x.Classification == ImportRecordClass.Record)
+                    .ToArrayAsync(cancellationToken);
+                if (eligible.Any(x => x.Decision == ImportDecision.Pending))
+                    throw new ImportRuleException("Resolva todos os registros elegíveis antes de confirmar.");
+                if (eligible.Any(x => x.Severity == ImportIssueSeverity.Error && x.Decision == ImportDecision.Approved))
                     throw new ImportRuleException("Corrija ou rejeite os registros com erro antes de confirmar.");
+                if (await db.ImportReconciliationCandidates.AnyAsync(
+                    x => x.ImportBatchId == batchId && x.Decision == ImportReconciliationDecision.Pending,
+                    cancellationToken))
+                    throw new ImportRuleException("Resolva os vínculos de reconciliação antes de confirmar.");
 
                 var created = 0;
                 var reused = 0;
@@ -322,10 +532,6 @@ public sealed class ImportService(
                         reused += outcome.Reused;
                         rejected += outcome.Rejected;
                     }
-                    catch (ImportValidationException)
-                    {
-                        rejected++;
-                    }
                     catch
                     {
                         failed++;
@@ -336,7 +542,32 @@ public sealed class ImportService(
                 batch.State = ImportState.Confirmed;
                 batch.ConfirmedBy = actor.UserId;
                 batch.ConfirmedAt = DateTimeOffset.UtcNow;
-                batch.StatisticsJson = JsonSerializer.Serialize(new { confirmed = true, created, reused, rejected, failed });
+                var byCurrency = rows
+                    .Select(row => new
+                    {
+                        Currency = First(
+                            JsonSerializer.Deserialize<Dictionary<string, string?>>(row.DerivedValuesJson) ?? [],
+                            "moeda", "currency") ?? "UNK",
+                        row.Decision
+                    })
+                    .GroupBy(item => item.Currency, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => new
+                        {
+                            approved = group.Count(item => item.Decision == ImportDecision.Approved),
+                            rejected = group.Count(item => item.Decision is ImportDecision.Rejected or ImportDecision.Ignored)
+                        },
+                        StringComparer.OrdinalIgnoreCase);
+                batch.StatisticsJson = JsonSerializer.Serialize(new
+                {
+                    confirmed = true,
+                    created,
+                    reused,
+                    rejected,
+                    failed,
+                    byCurrency
+                });
                 auditWriter.Record("importacao.confirmada", "ImportBatch", batch.Id, new
                 {
                     created,
@@ -390,7 +621,8 @@ public sealed class ImportService(
         var description = First(values, "divida", "descricao", "descrição", "credor", "nome", "titulo", "estabelecimento")
             ?? $"{row.SheetName} linha {row.RowNumber}";
         var currency = NormalizeCurrency(First(values, "moeda", "currency"));
-        var date = ParseDate(First(derived, "competencia") ?? First(values, "competencia", "mes", "data", "datavencimento"));
+        var date = ParseDate(First(derived, "competencia") ?? First(values, "competencia", "mes", "datavencimento"));
+        var purchaseDate = ParseDate(First(values, "datacompra", "data_compra", "purchasedate"));
         var amount = ParseDecimal(First(derived, "valor_original") ?? First(values, "valortotal", "valorparcela", "valor", "total"));
         var installment = ParseInt(First(derived, "numero_parcela") ?? First(values, "numeroparcela", "parcela", "nparcela"));
         var person = await FindPersonAsync(First(derived, "responsavel") ?? First(values, "responsavel", "quem"), cancellationToken);
@@ -398,8 +630,46 @@ public sealed class ImportService(
         var occurrenceKey = BuildOccurrenceKey(row, date, installment, description);
         var forecast = row.SourceType is ImportSourceType.Backup or ImportSourceType.Scenario or ImportSourceType.Anticipation;
 
+        if (row.SourceType == ImportSourceType.Annual)
+        {
+            var linkedCandidate = await db.ImportReconciliationCandidates.AsNoTracking()
+                .Where(x => x.SourceRecordId == row.Id && x.Decision == ImportReconciliationDecision.Linked)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (linkedCandidate is not null)
+            {
+                var targetLink = await db.ImportLinks.SingleOrDefaultAsync(
+                    x => x.SourceRecordId == linkedCandidate.CandidateRecordId &&
+                         x.EntityType == "PayableTitle" &&
+                         x.Role == "effective", cancellationToken);
+                if (targetLink is not null)
+                {
+                    var targetTitle = await db.PayableTitles.SingleAsync(x => x.Id == targetLink.EntityId, cancellationToken);
+                    if (targetTitle.ResponsibleId is null && person is not null)
+                        targetTitle.ResponsibleId = person.Id;
+                    if (!await db.ImportLinks.AnyAsync(x =>
+                            x.ImportBatchId == batch.Id && x.SourceRecordId == row.Id &&
+                            x.EntityId == targetTitle.Id, cancellationToken))
+                        db.ImportLinks.Add(new ImportLink
+                        {
+                            TenantId = batch.TenantId,
+                            SpaceId = batch.SpaceId,
+                            CreatedBy = actor.UserId,
+                            ImportBatchId = batch.Id,
+                            SourceRecordId = row.Id,
+                            EntityType = "PayableTitle",
+                            EntityId = targetTitle.Id,
+                            Role = "annual-complement",
+                            OccurrenceKey = occurrenceKey
+                        });
+                    row.PrevailingSource = "installments";
+                    await db.SaveChangesAsync(cancellationToken);
+                    return new(0, 1, 0);
+                }
+            }
+        }
+
         if (row.SourceType == ImportSourceType.Travel)
-            return await MapTravelAsync(batch, row, description, currency, amount, date, category?.Id, person?.Id, occurrenceKey, cancellationToken);
+            return await MapTravelAsync(batch, row, description, currency, amount, purchaseDate ?? date, category?.Id, person?.Id, occurrenceKey, cancellationToken);
 
         var obligation = await db.Obligations.SingleOrDefaultAsync(x =>
             x.Description == description && x.Currency == currency && x.Kind == (installment.HasValue ? "Installment" : "Single"), cancellationToken);
@@ -410,9 +680,11 @@ public sealed class ImportService(
         obligation.Description = description.Trim();
         obligation.Creditor = First(values, "credor");
         obligation.Kind = installment.HasValue ? "Installment" : "Single";
-        obligation.PurchaseDate = date;
-        obligation.PurchaseDateContext = date is null ? First(values, "data", "competencia") : null;
-        obligation.DueDay = date?.Day;
+        obligation.PurchaseDate = purchaseDate;
+        obligation.PurchaseDateContext = purchaseDate is null
+            ? First(values, "datacompra", "data_compra", "competencia", "mes")
+            : null;
+        obligation.DueDay = ParseDay(First(values, "datavencimento", "diavencimento")) ?? date?.Day;
         obligation.InstallmentCount = ParseInt(First(values, "quantidadeparcelas", "parcelas"));
         obligation.Currency = currency;
         obligation.Active = true;
@@ -424,8 +696,8 @@ public sealed class ImportService(
         {
             var recurrence = New<Recurrence>();
             recurrence.ObligationId = obligation.Id;
-            recurrence.AnchorDate = date;
-            recurrence.NominalDay = date?.Day ?? 1;
+            recurrence.AnchorDate = purchaseDate ?? date;
+            recurrence.NominalDay = (purchaseDate ?? date)?.Day ?? 1;
             recurrence.Active = true;
             db.Recurrences.Add(recurrence);
             await db.SaveChangesAsync(cancellationToken);
@@ -436,7 +708,7 @@ public sealed class ImportService(
                     SpaceId = batch.SpaceId,
                     CreatedBy = actor.UserId,
                     RecurrenceId = recurrence.Id,
-                    StartDate = date ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                    StartDate = purchaseDate ?? date ?? DateOnly.FromDateTime(DateTime.UtcNow),
                     CycleAmount = recurrenceAmount,
                     Currency = currency,
                     IntervalMonths = Math.Max(ParseInt(First(values, "intervalo", "meses")) ?? 1, 1)
@@ -518,16 +790,17 @@ public sealed class ImportService(
 
         var account = await FindAccountAsync(First(values, "conta", "account", "banco"), cancellationToken);
         var accountBalance = ParseDecimal(First(values, "saldo", "saldoatual", "balance"));
-        if (account is not null && accountBalance is decimal balance &&
+        var positionDate = ParseDate(First(values, "dataposicao", "data_posicao"));
+        if (account is not null && accountBalance is decimal balance && positionDate is DateOnly observedDate &&
             !await db.AccountPositions.AnyAsync(x => x.AccountId == account.Id &&
-                x.PositionDate == (date ?? DateOnly.FromDateTime(DateTime.UtcNow)), cancellationToken))
+                x.PositionDate == observedDate, cancellationToken))
             db.AccountPositions.Add(new AccountPosition
             {
                 TenantId = batch.TenantId,
                 SpaceId = batch.SpaceId,
                 CreatedBy = actor.UserId,
                 AccountId = account.Id,
-                PositionDate = date ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                PositionDate = observedDate,
                 Balance = balance
             });
 
@@ -617,7 +890,7 @@ public sealed class ImportService(
     };
 
     private static string BuildOccurrenceKey(ImportSourceRecord row, DateOnly? date, int? installment, string description) =>
-        $"{row.SourceType}:{row.SheetName}:{row.RowNumber}:{date:yyyy-MM-dd}:{installment}:{SpreadsheetTextNormalizer.Normalize(description)}";
+        $"{row.SourceType}:{date:yyyy-MM-dd}:{installment}:{SpreadsheetTextNormalizer.Normalize(description)}";
 
     private static string? First(IReadOnlyDictionary<string, string?> values, params string[] keys) =>
         keys.Select(key => values.TryGetValue(key, out var value) ? value : null)
@@ -646,6 +919,14 @@ public sealed class ImportService(
 
     private static int? ParseInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
+    private static int? ParseDay(string? value)
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var day) &&
+            day is >= 1 and <= 31)
+            return day;
+        return null;
+    }
 
     private static DateOnly? ParseDate(string? value)
     {
@@ -688,6 +969,51 @@ public sealed class ImportService(
         string.IsNullOrEmpty(value) ? string.Empty :
         $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
 
+    private static IReadOnlyList<ImportReconciliationCandidate> BuildReconciliationCandidates(
+        ImportBatch batch,
+        IReadOnlyList<ImportSourceRecord> records)
+    {
+        var parsed = records
+            .Where(record => record.Classification == ImportRecordClass.Record &&
+                record.Month.HasValue &&
+                record.SourceType is ImportSourceType.Annual or ImportSourceType.Installments)
+            .Select(record =>
+            {
+                var values = JsonSerializer.Deserialize<Dictionary<string, string?>>(record.OriginalValuesJson) ?? [];
+                var description = values.FirstOrDefault(pair =>
+                    pair.Key is "divida" or "descricao" or "nome" or "titulo").Value;
+                return (record, Key: $"{SpreadsheetTextNormalizer.Normalize(description)}:{record.Month}");
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Key))
+            .ToArray();
+        var candidates = new List<ImportReconciliationCandidate>();
+        foreach (var group in parsed.GroupBy(item => item.Key, StringComparer.Ordinal))
+        {
+            var annual = group.Where(item => item.record.SourceType == ImportSourceType.Annual).ToArray();
+            var installments = group.Where(item => item.record.SourceType == ImportSourceType.Installments).ToArray();
+            foreach (var source in annual)
+            {
+                foreach (var candidate in installments)
+                {
+                    candidates.Add(new ImportReconciliationCandidate
+                    {
+                        TenantId = batch.TenantId,
+                        SpaceId = batch.SpaceId,
+                        CreatedBy = batch.CreatedBy,
+                        ImportBatchId = batch.Id,
+                        SourceRecordId = source.record.Id,
+                        CandidateRecordId = candidate.record.Id,
+                        MatchKind = "annual-installment",
+                        Confidence = .85m,
+                        Reason = "Descrição e competência coincidem; parcelas prevalecem no valor e número.",
+                        Decision = ImportReconciliationDecision.Pending
+                    });
+                }
+            }
+        }
+        return candidates;
+    }
+
     private async Task<ImportAnalysisResult> ResultAsync(Guid batchId, ImportState state, CancellationToken cancellationToken)
     {
         var batch = await db.ImportBatches.AsNoTracking().SingleAsync(x => x.Id == batchId, cancellationToken);
@@ -700,5 +1026,33 @@ public sealed class ImportService(
             records.Count(x => x.Severity == ImportIssueSeverity.Error),
             records.Count(x => x.Severity == ImportIssueSeverity.Warning),
             records.Count(x => x.Severity == ImportIssueSeverity.Info));
+    }
+
+    private async Task<ImportRowEntry> ToEntryAsync(
+        ImportSourceRecord row,
+        CancellationToken cancellationToken)
+    {
+        var issues = await db.ImportIssues.AsNoTracking()
+            .Where(x => x.ImportSourceRecordId == row.Id)
+            .OrderBy(x => x.Severity).ThenBy(x => x.CreatedAt)
+            .Select(x => new ImportIssueEntry(x.Id, x.Code, x.Message, x.Severity, x.Resolved))
+            .ToArrayAsync(cancellationToken);
+        return new(
+            row.Id,
+            row.SheetName,
+            row.RowNumber,
+            row.CellReference,
+            row.SourceType,
+            row.Classification,
+            row.Month,
+            row.OccurrenceKey,
+            row.OriginalValuesJson,
+            row.DerivedValuesJson,
+            row.IssueCode,
+            row.IssueMessage,
+            row.Severity,
+            row.Decision,
+            row.Version,
+            issues);
     }
 }

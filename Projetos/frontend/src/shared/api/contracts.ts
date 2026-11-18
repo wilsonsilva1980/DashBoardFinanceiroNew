@@ -98,8 +98,13 @@ export type ImportDecision = 'Pending' | 'Approved' | 'Rejected' | 'Ignored';
 export type ImportSeverity = 'Info' | 'Warning' | 'Error';
 export interface ImportAnalysisResult { batchId: string; state: ImportState; totalRows: number; eligibleRows: number; errorCount: number; warningCount: number; infoCount: number }
 export interface ImportBatch { id: string; originalFileName: string; sizeBytes: number; parserVersion: string; state: ImportState; statisticsJson: string; version: number; createdAt: string }
+export interface ImportIssue { id: string; code: string; message: string; severity: ImportSeverity; resolved: boolean }
 export interface ImportRow {
   id: string; sheetName: string; rowNumber: number; cellReference: string; sourceType: string; classification: string;
-  derivedValuesJson: string; issueCode: string | null; issueMessage: string | null; severity: ImportSeverity; decision: ImportDecision; version: number;
+  month: number | null; occurrenceKey: string; originalValuesJson: string; derivedValuesJson: string;
+  issueCode: string | null; issueMessage: string | null; severity: ImportSeverity; decision: ImportDecision; version: number;
+  issues: ImportIssue[];
 }
+export interface ImportPendingSummary { errors: number; warnings: number; pending: number }
+export interface ImportReconciliation { id: string; sourceRecordId: string; candidateRecordId: string; matchKind: string; confidence: number; reason: string; decision: string; version: number }
 export interface ImportConfirmation { batchId: string; state: ImportState; created: number; reused: number; rejected: number; failed: number }

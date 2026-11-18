@@ -20,7 +20,7 @@ public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBa
         b.Property(x => x.FailureReason).HasMaxLength(1000);
         b.HasAlternateKey(x => new { x.TenantId, x.SpaceId, x.Id });
         b.HasOne<FinancialSpace>().WithMany().HasForeignKey(x => new { x.TenantId, x.SpaceId }).HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
-        b.HasIndex(x => new { x.TenantId, x.SpaceId, x.ContentHash }).IsUnique();
+        b.HasIndex(x => new { x.TenantId, x.SpaceId, x.ContentHash });
         b.HasIndex(x => new { x.TenantId, x.SpaceId, x.State, x.CreatedAt });
     }
 }

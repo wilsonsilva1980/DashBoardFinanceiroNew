@@ -16,10 +16,12 @@ public sealed class ImportSourceRecordConfiguration : IEntityTypeConfiguration<I
         b.Property(x => x.SheetName).HasMaxLength(100).IsRequired();
         b.Property(x => x.NormalizedSheetName).HasMaxLength(100).IsRequired();
         b.Property(x => x.CellReference).HasMaxLength(20).IsRequired();
+        b.Property(x => x.OccurrenceKey).HasMaxLength(200).IsRequired();
         b.Property(x => x.RawContentJson).IsRequired();
+        b.Property(x => x.OriginalValuesJson).HasMaxLength(8000).IsRequired();
         b.Property(x => x.DerivedValuesJson).IsRequired();
-        b.Property(x => x.IssueCode).HasMaxLength(50);
-        b.Property(x => x.IssueMessage).HasMaxLength(1000);
+        b.Property(x => x.IssueCode).HasMaxLength(80);
+        b.Property(x => x.IssueMessage).HasMaxLength(2000);
         b.Property(x => x.PrevailingSource).HasMaxLength(100);
         b.HasAlternateKey(x => new { x.TenantId, x.SpaceId, x.Id });
         b.HasOne<FinancialSpace>().WithMany().HasForeignKey(x => new { x.TenantId, x.SpaceId }).HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
@@ -27,5 +29,6 @@ public sealed class ImportSourceRecordConfiguration : IEntityTypeConfiguration<I
         b.HasIndex(x => new { x.ImportBatchId, x.Classification });
         b.HasIndex(x => new { x.ImportBatchId, x.Decision });
         b.HasIndex(x => new { x.ImportBatchId, x.Severity });
+        b.HasIndex(x => new { x.ImportBatchId, x.OccurrenceKey }).IsUnique();
     }
 }

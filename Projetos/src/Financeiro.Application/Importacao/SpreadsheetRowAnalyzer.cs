@@ -11,7 +11,10 @@ public sealed record ParsedSpreadsheetRow(
     string CellReference,
     ImportRecordClass Classification,
     IReadOnlyDictionary<string, string?> Values,
-    IReadOnlyDictionary<string, string?> DerivedValues);
+    IReadOnlyDictionary<string, string?> DerivedValues,
+    int? Month = null,
+    string OccurrenceKey = "",
+    IReadOnlyDictionary<string, string?>? OriginalValues = null);
 
 public static class SpreadsheetRowAnalyzer
 {
@@ -40,28 +43,129 @@ public static class SpreadsheetRowAnalyzer
                     string.IsNullOrWhiteSpace(header))
                     continue;
 
-                if (!values.TryGetValue(header, out var current) ||
-                    string.IsNullOrWhiteSpace(current))
-                    values[header] = cell.Value;
+                var key = header;
+                var suffix = 2;
+                while (values.ContainsKey(key))
+                    key = $"{header}_{suffix++}";
+                values[key] = cell.Value;
             }
-            var derived = classification == ImportRecordClass.Record
-                ? DeriveValues(values)
-                : new Dictionary<string, string?>();
             var first = nonEmpty[0];
-            parsed.Add(new ParsedSpreadsheetRow(
-                sheet.Name,
-                sheet.IsHidden,
-                sourceType,
-                row.RowNumber,
-                first.ColumnNumber,
-                first.Address,
-                classification,
-                values,
-                derived));
+            if (classification != ImportRecordClass.Record)
+            {
+                parsed.Add(new ParsedSpreadsheetRow(
+                    sheet.Name, sheet.IsHidden, sourceType, row.RowNumber, first.ColumnNumber,
+                    first.Address, classification, values, new Dictionary<string, string?>()));
+                continue;
+            }
+
+            var occurrences = ExpandMonthlyOccurrences(sheet.Name, sheet.IsHidden, sourceType, row, values);
+            if (occurrences.Count == 0)
+                occurrences.Add(new ParsedSpreadsheetRow(
+                    sheet.Name, sheet.IsHidden, sourceType, row.RowNumber, first.ColumnNumber,
+                    first.Address, classification, values, DeriveValues(values), null, string.Empty, values));
+            parsed.AddRange(occurrences);
         }
 
         return parsed;
     }
+
+    private static List<ParsedSpreadsheetRow> ExpandMonthlyOccurrences(
+        string sheetName,
+        bool isHidden,
+        ImportSourceType sourceType,
+        RawRow row,
+        IReadOnlyDictionary<string, string?> rowValues)
+    {
+        if (sourceType is not (ImportSourceType.Annual or ImportSourceType.Installments or
+            ImportSourceType.Anticipation or ImportSourceType.Backup or ImportSourceType.Scenario))
+            return [];
+
+        var result = new List<ParsedSpreadsheetRow>();
+        var year = DetectYear(sheetName);
+        for (var month = 1; month <= 12; month++)
+        {
+            var start = sourceType is ImportSourceType.Annual
+                ? 4 + ((month - 1) * 4)
+                : InstallmentStartColumn(sourceType, month);
+            var width = sourceType is ImportSourceType.Annual ? 4 : InstallmentBlockWidth(sourceType, month);
+            var cells = row.Cells.Where(cell => cell.ColumnNumber >= start && cell.ColumnNumber < start + width).ToArray();
+            if (!cells.Any(cell => !string.IsNullOrWhiteSpace(cell.Value)))
+                continue;
+
+            var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+            foreach (var pair in rowValues.Where(pair => !pair.Key.Contains('_', StringComparison.Ordinal)))
+                values[pair.Key] = pair.Value;
+            if (sourceType == ImportSourceType.Annual)
+            {
+                Put(values, "valortotal", cells.ElementAtOrDefault(0)?.Value);
+                Put(values, "valorpago", cells.ElementAtOrDefault(1)?.Value);
+                Put(values, "responsavel", cells.ElementAtOrDefault(2)?.Value);
+                Put(values, "status", cells.ElementAtOrDefault(3)?.Value);
+            }
+            else
+            {
+                Put(values, "numeroparcela", cells.ElementAtOrDefault(0)?.Value);
+                Put(values, "valorparcela", cells.ElementAtOrDefault(1)?.Value);
+                Put(values, "valorfaltante", cells.ElementAtOrDefault(2)?.Value);
+                Put(values, "valorpago", cells.ElementAtOrDefault(3)?.Value);
+                Put(values, "responsavel", cells.ElementAtOrDefault(4)?.Value);
+                Put(values, "status", cells.ElementAtOrDefault(5)?.Value);
+                if (width > 6)
+                {
+                    Put(values, "valorquitacao", cells.ElementAtOrDefault(6)?.Value);
+                    Put(values, "quitacaopago", cells.ElementAtOrDefault(7)?.Value);
+                }
+            }
+
+            var derived = new Dictionary<string, string?>(DeriveValues(values), StringComparer.Ordinal);
+            if (year is int actualYear)
+                derived["competencia"] = $"{actualYear:0000}-{month:00}-01";
+            var description = First(values, "divida", "descricao", "nome", "titulo") ?? string.Empty;
+            var occurrenceKey = $"{sourceType}:{SpreadsheetTextNormalizer.Normalize(sheetName)}:{row.RowNumber}:{month}:{SpreadsheetTextNormalizer.Normalize(description)}";
+            result.Add(new ParsedSpreadsheetRow(
+                sheetName,
+                isHidden,
+                sourceType,
+                row.RowNumber,
+                start,
+                cells[0].Address,
+                ImportRecordClass.Record,
+                values,
+                derived,
+                month,
+                occurrenceKey,
+                values));
+        }
+
+        return result;
+    }
+
+    private static int InstallmentStartColumn(ImportSourceType sourceType, int month)
+    {
+        var start = 5;
+        for (var previous = 1; previous < month; previous++)
+            start += InstallmentBlockWidth(sourceType, previous);
+        return start;
+    }
+
+    private static int InstallmentBlockWidth(ImportSourceType sourceType, int month) =>
+        sourceType == ImportSourceType.Anticipation && month == 4 ? 8 : 6;
+
+    private static int? DetectYear(string sheetName)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(sheetName, @"(?<!\d)(20\d{2})(?!\d)");
+        return match.Success && int.TryParse(match.Value, out var year) ? year : null;
+    }
+
+    private static void Put(IDictionary<string, string?> values, string key, string? value)
+    {
+        if (value is not null)
+            values[key] = value;
+    }
+
+    private static string? First(IReadOnlyDictionary<string, string?> values, params string[] keys) =>
+        keys.Select(key => values.TryGetValue(key, out var value) ? value : null)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     public static ImportSourceType DetectSourceType(string sheetName)
     {
@@ -69,9 +173,14 @@ public static class SpreadsheetRowAnalyzer
         if (normalized.Contains("antecip")) return ImportSourceType.Anticipation;
         if (normalized.Contains("bkp") || normalized.Contains("backup")) return ImportSourceType.Backup;
         if (normalized.Contains("parcela") || normalized.Contains("fatura")) return ImportSourceType.Installments;
-        if (normalized.Contains("recorr")) return ImportSourceType.Recurrence;
+        if (normalized.Contains("recorr") || normalized.Contains("streaming") ||
+            normalized.Contains("servico") || normalized.Contains("casa"))
+            return ImportSourceType.Recurrence;
         if (normalized.Contains("viagem") || normalized.Contains("travel")) return ImportSourceType.Travel;
-        if (normalized.Contains("cadastro") || normalized.Contains("catalog")) return ImportSourceType.Catalog;
+        if (normalized.Contains("cadastro") || normalized.Contains("catalog") ||
+            normalized.Contains("contas") || normalized.Contains("banco") ||
+            normalized.Contains("cartoes") || normalized.Contains("cartao"))
+            return ImportSourceType.Catalog;
         if (normalized.Contains("2027") || normalized.Contains("cenario") || normalized.Contains("scenario"))
             return ImportSourceType.Scenario;
         return ImportSourceType.Annual;

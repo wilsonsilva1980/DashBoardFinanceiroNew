@@ -58,6 +58,9 @@ public sealed class FinanceiroDbContext(DbContextOptions<FinanceiroDbContext> op
     public DbSet<InformedReference> InformedReferences => Set<InformedReference>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<ImportSourceRecord> ImportSourceRecords => Set<ImportSourceRecord>();
+    public DbSet<ImportIssue> ImportIssues => Set<ImportIssue>();
+    public DbSet<ImportCorrection> ImportCorrections => Set<ImportCorrection>();
+    public DbSet<ImportReconciliationCandidate> ImportReconciliationCandidates => Set<ImportReconciliationCandidate>();
     public DbSet<ImportLink> ImportLinks => Set<ImportLink>();
     public DbSet<ImportAnnotation> ImportAnnotations => Set<ImportAnnotation>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
